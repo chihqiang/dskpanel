@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
+import ProgressBar from '@/components/ui/ProgressBar.vue'
 import { useToast } from '@/composables/useToast'
 import { pushImageStream } from '@/api/image'
 
@@ -16,15 +17,26 @@ const pushRef = ref('')
 const pushing = ref(false)
 const toast = useToast()
 const done = ref(false)
-const progressLines = ref<string[]>([])
+/** 按层 ID 聚合的最新进度文本。 */
+const layerProgress = ref<Record<string, string>>({})
 let stop: (() => void) | null = null
+
+/** 整体进度估算：已完成层数 / 已知总层数。 */
+const overallProgress = computed(() => {
+  const entries = Object.values(layerProgress.value)
+  if (entries.length === 0) return -1
+  const completed = entries.filter(
+    (p) => p.includes('Pushed') || p.includes('already exists') || p.includes('Mounted from'),
+  ).length
+  return completed / entries.length
+})
 
 watch(
   () => props.open,
   (open) => {
     if (open) {
       done.value = false
-      progressLines.value = []
+      layerProgress.value = {}
       // 预填源标签，用户可改成目标地址。
       pushRef.value = props.sourceTag || ''
     }
@@ -35,19 +47,18 @@ function submit(): void {
   if (!pushRef.value) return
   pushing.value = true
   done.value = false
-  progressLines.value = []
+  layerProgress.value = {}
 
   stop = pushImageStream(
     pushRef.value,
     (msg) => {
-      // 解析 Docker push 进度消息。
+      // 按层 ID 聚合最新状态（对应 docker push CLI 输出）。
       const status = (msg.status as string) ?? ''
       const progress = (msg.progress as string) ?? ''
       const id = (msg.id as string) ?? ''
-      let line = status
-      if (id) line = `${id}: ${line}`
-      if (progress) line += ` ${progress}`
-      if (line) progressLines.value.push(line)
+      if (id) {
+        layerProgress.value[id] = progress || status
+      }
     },
     () => {
       done.value = true
@@ -87,15 +98,32 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <!-- 进度区 -->
+      <!-- 进度条 -->
+      <div v-if="pushing || done" class="space-y-2">
+        <div class="flex items-center justify-between text-xs text-slate-500">
+          <span>{{ done ? '完成' : '推送中...' }}</span>
+          <span v-if="overallProgress >= 0 && !done">{{ Math.round(overallProgress * 100) }}%</span>
+        </div>
+        <ProgressBar
+          :value="done ? 1 : overallProgress"
+          :indeterminate="overallProgress < 0 && !done"
+        />
+      </div>
+
+      <!-- 层级进度列表（按层聚合，对应 docker push 输出） -->
       <div
-        v-if="pushing || done || progressLines.length > 0"
-        class="max-h-56 overflow-y-auto rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100"
+        v-if="Object.keys(layerProgress).length > 0"
+        class="max-h-40 overflow-y-auto rounded-md border border-slate-100 p-2 dark:border-slate-700"
       >
-        <template v-if="progressLines.length > 0">
-          <div v-for="(line, idx) in progressLines" :key="idx" class="whitespace-pre-wrap break-all">{{ line }}</div>
-        </template>
-        <div v-else-if="pushing" class="text-slate-500">推送中...</div>
+        <div
+          v-for="(prog, id) in layerProgress"
+          :key="id"
+          class="flex items-center gap-2 truncate py-0.5 font-mono text-xs text-slate-500"
+        >
+          <span
+          >{{ id }}:</span>
+          <span class="truncate">{{ prog }}</span>
+        </div>
       </div>
 
       <div v-if="done" class="text-sm text-green-600">✅ 推送完成</div>

@@ -2,9 +2,11 @@
 import { ref, watch } from 'vue'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
+import ProgressBar from '@/components/ui/ProgressBar.vue'
 import { useToast } from '@/composables/useToast'
 import { useNProgress } from '@/composables/useNProgress'
 import { exportImage } from '@/api/image'
+import { fmtSize } from '@/utils/format'
 
 const props = defineProps<{ open: boolean; target: { ids: string[]; tag: string } | null }>()
 
@@ -14,6 +16,8 @@ const emit = defineEmits<{
 
 const exporting = ref(false)
 const done = ref(false)
+const progressValue = ref(0)
+const progressText = ref('')
 const toast = useToast()
 const nprogress = useNProgress()
 
@@ -22,6 +26,8 @@ watch(
   (open) => {
     if (open && props.target) {
       done.value = false
+      progressValue.value = 0
+      progressText.value = ''
       start()
     }
   },
@@ -35,9 +41,12 @@ async function start(): Promise<void> {
   nprogress.start()
   try {
     await exportImage(props.target.ids, props.target.tag, (loaded, total) => {
+      progressValue.value = total > 0 ? loaded / total : 0
+      progressText.value = total > 0 ? `${fmtSize(loaded)} / ${fmtSize(total)}` : ''
       nprogress.set(total > 0 ? loaded / total : 0)
     })
     done.value = true
+    progressValue.value = 1
     nprogress.done()
     toast.success('已导出镜像，开始下载')
   } catch (err) {
@@ -58,6 +67,18 @@ function close(): void {
     <div class="space-y-4">
       <div class="truncate text-sm text-slate-700 dark:text-slate-200">
         <span class="text-slate-500">正在导出：</span>{{ target?.tag || target?.ids[0] }}
+      </div>
+
+      <!-- 导出进度 -->
+      <div v-if="exporting || done" class="space-y-2">
+        <div class="flex items-center justify-between text-xs text-slate-500">
+          <span>{{ done ? '完成' : '导出中...' }}</span>
+          <span v-if="progressText && !done">{{ progressText }}</span>
+        </div>
+        <ProgressBar
+          :value="done ? 1 : progressValue"
+          :indeterminate="progressValue <= 0 && !done"
+        />
       </div>
 
       <div v-if="done" class="flex items-center gap-2 text-sm text-green-600">

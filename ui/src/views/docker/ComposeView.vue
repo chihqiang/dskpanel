@@ -5,6 +5,7 @@ import { Rocket } from '@lucide/vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Modal from '@/components/ui/Modal.vue'
+import ProgressBar from '@/components/ui/ProgressBar.vue'
 import SpecEditorBody from '@/components/ui/SpecEditorBody.vue'
 import type { SpecField } from '@/components/ui/SpecEditorModal.vue'
 import ComposeProjects from '@/components/docker/ComposeProjects.vue'
@@ -44,7 +45,14 @@ watch(selectedTemplate, (name) => {
 
 /** Compose 表单字段 schema。 */
 const fields: SpecField[] = [
-  { key: 'name', label: '项目名', type: 'text', placeholder: '例如 myapp（可选）', span: 6 },
+  {
+    key: 'name',
+    label: '项目名',
+    type: 'text',
+    placeholder: '留空自动生成唯一项目名',
+    help: '填写相同项目名将更新该 Compose 项目；留空则创建独立新项目',
+    span: 6,
+  },
   {
     key: 'services',
     label: '服务',
@@ -82,7 +90,8 @@ function formToYaml(f: Record<string, any>): string {
     throw new Error('至少需要一个服务')
   }
   const project: Record<string, any> = {}
-  if (f.name) project.name = f.name
+  // 项目名：留空时自动生成唯一名（Compose 同名=更新、唯一名=新建，避免误覆盖已有项目）。
+  project.name = f.name?.trim() || `compose-${Date.now()}`
   project.services = {}
   for (const s of f.services) {
     if (!s.name || !s.image) {
@@ -184,6 +193,8 @@ function onDeploy(): void {
     toast.error('请先填写 Compose 定义')
     return
   }
+  // 防御：若存在上一次未结束的部署流，先终止再创建新流。
+  stopDeploy?.()
   deploying.value = true
   deployLines.value = []
   deployDone.value = false
@@ -293,6 +304,8 @@ onBeforeUnmount(() => {
             {{ deployOk ? '部署成功' : '部署失败' }}
           </Badge>
         </div>
+        <!-- 部署进行中进度条（命令式部署无法量化，用不确定动画） -->
+        <ProgressBar v-if="deploying" :value="0" indeterminate :height="4" />
         <div
           ref="deployBox"
           class="max-h-64 overflow-y-auto rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100"

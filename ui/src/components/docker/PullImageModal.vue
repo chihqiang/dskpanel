@@ -19,7 +19,6 @@ const pulling = ref(false)
 const toast = useToast()
 const activity = useActivity()
 const done = ref(false)
-const progressLines = ref<string[]>([])
 /** 按层 ID 聚合的最新进度文本。 */
 const layerProgress = ref<Record<string, string>>({})
 let stop: (() => void) | null = null
@@ -37,7 +36,6 @@ watch(
   (open) => {
     if (open) {
       done.value = false
-      progressLines.value = []
       layerProgress.value = {}
     }
   },
@@ -47,7 +45,6 @@ function submit(): void {
   if (!pullRef.value) return
   pulling.value = true
   done.value = false
-  progressLines.value = []
   layerProgress.value = {}
 
   stop = pullImageStream(
@@ -56,11 +53,7 @@ function submit(): void {
       const status = (msg.status as string) ?? ''
       const progress = (msg.progress as string) ?? ''
       const id = (msg.id as string) ?? ''
-      let line = status
-      if (id) line = `${id}: ${line}`
-      if (progress) line += ` ${progress}`
-      if (line) progressLines.value.push(line)
-      // 按 layer ID 聚合最新状态。
+      // 按 layer ID 聚合最新状态（仅保留一层，避免重复显示）。
       if (id) {
         layerProgress.value[id] = progress || status
       }
@@ -127,10 +120,10 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <!-- 层级进度列表 -->
+      <!-- 层级进度列表（按层聚合，对应 docker pull 输出） -->
       <div
         v-if="Object.keys(layerProgress).length > 0"
-        class="max-h-32 overflow-y-auto rounded-md border border-slate-100 p-2 dark:border-slate-700"
+        class="max-h-40 overflow-y-auto rounded-md border border-slate-100 p-2 dark:border-slate-700"
       >
         <div
           v-for="(prog, id) in layerProgress"
@@ -141,14 +134,6 @@ onBeforeUnmount(() => {
           >{{ id }}:</span>
           <span class="truncate">{{ prog }}</span>
         </div>
-      </div>
-
-      <!-- 完整日志 -->
-      <div
-        v-if="progressLines.length > 0"
-        class="max-h-40 overflow-y-auto rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100"
-      >
-        <div v-for="(line, idx) in progressLines" :key="idx" class="whitespace-pre-wrap break-all">{{ line }}</div>
       </div>
 
       <div v-if="done" class="flex items-center gap-2 text-sm text-green-600">

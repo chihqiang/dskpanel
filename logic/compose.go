@@ -201,13 +201,17 @@ func (e *composeEventForwarder) Done(operation string, success bool) {
 }
 
 // writeBackup 将编排文件内容持久化到备份目录（保留备份，不清理），返回文件路径。
-// 文件名带时间戳与随机后缀，避免覆盖历史备份。
+// 每次部署写入独立子目录（时间戳唯一），使无顶层 name 时默认项目名（工作目录 basename）唯一，
+// 避免 Compose 同名项目互相覆盖（同名=更新，唯一名=新建）。
 func (l *ComposeLogic) writeBackup(content string) (string, error) {
 	if err := os.MkdirAll(l.backupDir, 0o755); err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("compose_%s.yaml", time.Now().Format("20060102_150405.000"))
-	path := filepath.Join(l.backupDir, name)
+	dir := filepath.Join(l.backupDir, fmt.Sprintf("compose_%s", time.Now().Format("20060102_150405.000")))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "compose.yaml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return "", err
 	}
