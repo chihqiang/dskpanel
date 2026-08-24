@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -22,61 +23,65 @@ import (
 // 按配置开关（metric.enabled）定时采集本机 Docker 节点指标写入 nodes 表（type=docker）。
 // Docker 单机无 Pod 概念，不写 pods 表。
 // 数据按 metric.duration 保留，超出自动清理。
+//
+// 并发安全：ctx/cancel/stopped 在构造时初始化，避免 Start/Stop 并发时的数据竞争
+// （Stop 可能在 Start 完成字段赋值前被调用，导致 cancel 为空而无法解除阻塞、进程无法退出）。
 type MetricLogic struct {
-	db      *gorm.DB
-	cfg     config.Metric
-	docker  *DockerLogic
-	cancel  context.CancelFunc
-	stopped chan struct{}
+	db       *gorm.DB
+	cfg      config.Metric
+	docker   *DockerLogic
+	ctx      context.Context
+	cancel   context.CancelFunc
+	stopped  chan struct{}
+	stopOnce sync.Once
 }
 
 // NewMetricLogic 创建指标采集器。
 func NewMetricLogic(db *gorm.DB, cfg config.Metric) *MetricLogic {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &MetricLogic{
-		db:     db,
-		cfg:    cfg,
-		docker: &DockerLogic{},
+		db:      db,
+		cfg:     cfg,
+		docker:  &DockerLogic{},
+		ctx:     ctx,
+		cancel:  cancel,
+		stopped: make(chan struct{}),
 	}
 }
 
 // Start 启动采集循环（实现 service.Service 接口，阻塞直到 Stop）。
 func (l *MetricLogic) Start() {
-	ctx, cancel := context.WithCancel(context.Background())
-	l.cancel = cancel
-	l.stopped = make(chan struct{})
 	defer close(l.stopped)
 
 	if !l.cfg.Enabled {
 		logger.Infof("metric collector disabled, skip")
-		<-ctx.Done()
+		<-l.ctx.Done()
 		return
 	}
 	logger.Infof("metric collector started, resolution=%s duration=%s", l.cfg.Resolution, l.cfg.Duration)
 
 	// 启动时立即采集一次。
-	l.collectOnce(ctx)
+	l.collectOnce(l.ctx)
 
 	ticker := time.NewTicker(l.cfg.Resolution)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-ctx.Done():
+		case <-l.ctx.Done():
 			logger.Infof("metric collector stopped")
 			return
 		case <-ticker.C:
-			l.collectOnce(ctx)
+			l.collectOnce(l.ctx)
 		}
 	}
 }
 
-// Stop 停止采集器（实现 service.Service 接口）。
+// Stop 停止采集器（实现 service.Service 接口，幂等）。
 func (l *MetricLogic) Stop() {
-	if l.cancel != nil {
+	l.stopOnce.Do(func() {
 		l.cancel()
-	}
-	if l.stopped != nil {
 		<-l.stopped
-	}
+	})
 }
 
 // collectOnce 采集一次本机 Docker 节点指标并清理过期数据。
