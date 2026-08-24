@@ -1,0 +1,36 @@
+app:
+  name: dskpanel
+
+server:
+  host: 0.0.0.0
+  port: 8080
+
+logger:
+  level: 0
+  encoding: console
+  app_name: dskpanel
+
+db:
+  driver: sqlite
+  database: /tmp/dskpanel/dskpanel.db
+
+auth:
+  secret: dskpanel-change-me
+  token_ttl: 24h
+  username: admin
+  password: admin123
+
+metric:
+  enabled: true
+  resolution: 60s
+  duration: 7200s
+
+deploy:
+  dir: /tmp/dskpanel/deploy
+
+# Swarm 连接配置
+swarm:
+  endpoint: ""
+  ca: ""
+  cert: ""
+  key: ""

@@ -1,3 +1,3 @@
 # dskpanel
 
-一站式容器管理面板，统一管理单机 Docker、Docker‑Swarm 集群、Kubernetes 集群。
+轻量容器管理工具：单机 Docker + Docker‑Swarm（Kubernetes 规划中）。
