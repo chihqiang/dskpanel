@@ -3,6 +3,7 @@ import { onMounted, ref, computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { Container, Workflow, Boxes, Menu, X } from '@lucide/vue'
 import { useDockerDetect } from '@/composables/useDocker'
+import { useSwarmDetect } from '@/composables/useSwarmDetect'
 import { useAuthStore } from '@/stores/auth'
 import ActivityDrawer from '@/components/ui/ActivityDrawer.vue'
 import Tooltip from '@/components/ui/Tooltip.vue'
@@ -12,6 +13,7 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const { dockerInfo, dockerChecked, detect } = useDockerDetect()
+const { swarmStatus, detect: detectSwarm } = useSwarmDetect()
 
 /** 桌面侧边栏折叠（仅 lg 及以上生效）。 */
 const sidebarCollapsed = ref(false)
@@ -20,18 +22,26 @@ const mobileOpen = ref(false)
 
 onMounted(() => {
   detect()
+  detectSwarm()
   auth.initFromToken()
 })
 
 /** 路由变化时自动关闭移动端抽屉。 */
 watch(route, () => {
   mobileOpen.value = false
+  // 进入 Swarm 区域时强制刷新集群检测，启用/关闭后菜单能即时更新。
+  if (route.path.startsWith('/swarm')) {
+    void detectSwarm(true)
+  }
 })
 
 const username = computed(() => auth.username || 'admin')
 
 /** Docker 栏目是否可用。 */
 const dockerEnabled = computed(() => dockerInfo.value?.available ?? false)
+
+/** Swarm 集群是否可用（决定子菜单显隐）。 */
+const swarmEnabled = computed(() => swarmStatus.value?.available ?? false)
 
 /** 路由 meta.icon 字符串 → lucide 图标组件。 */
 const iconMap: Record<string, unknown> = {
@@ -65,6 +75,8 @@ const navItems = computed<NavItem[]>(() => {
       const base = `/${r.path}`
       const children: ChildNavItem[] = (r.children ?? [])
         .filter((c) => c.path && c.meta?.menu && c.meta.title)
+        // requiresSwarm 的子菜单仅在集群可用时显示。
+        .filter((c) => !c.meta?.requiresSwarm || swarmEnabled.value)
         .map((c) => ({
           label: c.meta!.title as string,
           to: `${base}/${c.path}`,

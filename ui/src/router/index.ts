@@ -21,6 +21,8 @@ declare module 'vue-router' {
     requiresDocker?: boolean
     /** 侧边栏菜单标签后的角标文案（如"即将上线"）。 */
     badge?: string
+    /** 需要 Swarm 集群可用才显示（子菜单，如节点/服务/网络/Secret）。 */
+    requiresSwarm?: boolean
   }
 }
 
@@ -62,10 +64,10 @@ const router = createRouter({
           children: [
             { path: '', redirect: '/swarm/overview' },
             { path: 'overview', name: 'swarm-overview', component: () => import('@/views/swarm/OverviewView.vue'), meta: { menu: true, title: '概览' } },
-            { path: 'nodes', name: 'swarm-nodes', component: () => import('@/views/swarm/NodesView.vue'), meta: { menu: true, title: '节点' } },
-            { path: 'services', name: 'swarm-services', component: () => import('@/views/swarm/ServicesView.vue'), meta: { menu: true, title: '服务' } },
-            { path: 'networks', name: 'swarm-networks', component: () => import('@/views/swarm/NetworksView.vue'), meta: { menu: true, title: '网络' } },
-            { path: 'secrets', name: 'swarm-secrets', component: () => import('@/views/swarm/SecretsView.vue'), meta: { menu: true, title: 'Secret' } },
+            { path: 'nodes', name: 'swarm-nodes', component: () => import('@/views/swarm/NodesView.vue'), meta: { menu: true, title: '节点', requiresSwarm: true } },
+            { path: 'services', name: 'swarm-services', component: () => import('@/views/swarm/ServicesView.vue'), meta: { menu: true, title: '服务', requiresSwarm: true } },
+            { path: 'networks', name: 'swarm-networks', component: () => import('@/views/swarm/NetworksView.vue'), meta: { menu: true, title: '网络', requiresSwarm: true } },
+            { path: 'secrets', name: 'swarm-secrets', component: () => import('@/views/swarm/SecretsView.vue'), meta: { menu: true, title: 'Secret', requiresSwarm: true } },
           ],
         },
         {

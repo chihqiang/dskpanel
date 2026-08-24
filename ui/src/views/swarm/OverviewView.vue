@@ -220,6 +220,8 @@ function fmtError(err: string | undefined): string {
       </div>
     </div>
 
+    <!-- 统计数据区（仅集群启用时展示） -->
+    <template v-if="available">
     <!-- 统计卡 -->
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <div
@@ -308,5 +310,6 @@ function fmtError(err: string | undefined): string {
         </div>
       </div>
     </Card>
+    </template>
   </div>
 </template>
