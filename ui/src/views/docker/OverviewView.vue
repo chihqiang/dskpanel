@@ -6,7 +6,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { Server, Cpu, MemoryStick, Box, Container, Image, Network, HardDrive, CircleDot, Trash2, Hash, RefreshCw, TerminalSquare, Layers, Tag, CircuitBoard, Folder } from '@lucide/vue'
+import { Server, Cpu, MemoryStick, Box, Container, Image, Network, HardDrive, CircleDot, Trash2, Hash, RefreshCw, TerminalSquare, Layers, Tag, CircuitBoard, Folder, Rocket, Power } from '@lucide/vue'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -280,24 +280,54 @@ const diskRows = computed<DiskUsageRow[]>(() => {
       </div>
     </Card>
 
-    <!-- 概览指标 -->
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-      <Card v-for="s in statCards" :key="s.label">
-        <div class="flex items-center gap-4">
-          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
-            <component :is="s.icon" class="h-6 w-6" />
+    <!-- 概览指标（Docker 可用时显示） -->
+    <template v-if="dockerInfo?.available">
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <Card v-for="s in statCards" :key="s.label">
+          <div class="flex items-center gap-4">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+              <component :is="s.icon" class="h-6 w-6" />
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm text-slate-500 dark:text-slate-400">{{ s.label }}</p>
+              <Tooltip :text="s.value" placement="top">
+                <p
+                  class="truncate font-semibold text-slate-800 dark:text-slate-100"
+                  :class="s.small ? 'text-base' : 'text-2xl'"
+                ><span v-if="s.mono" class="font-mono">{{ s.value }}</span><template v-else>{{ s.value }}</template></p>
+              </Tooltip>
+            </div>
           </div>
-          <div class="min-w-0">
-            <p class="text-sm text-slate-500 dark:text-slate-400">{{ s.label }}</p>
-            <Tooltip :text="s.value" placement="top">
-              <p
-                class="truncate font-semibold text-slate-800 dark:text-slate-100"
-                :class="s.small ? 'text-base' : 'text-2xl'"
-              ><span v-if="s.mono" class="font-mono">{{ s.value }}</span><template v-else>{{ s.value }}</template></p>
-            </Tooltip>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
+    </template>
+
+    <!-- Docker 未检测到：引导说明（参考 Swarm 概览的未启用引导） -->
+    <div
+      v-else-if="dockerChecked"
+      class="rounded-xl border border-amber-200 bg-amber-50/60 p-5 dark:border-amber-900/50 dark:bg-amber-900/10"
+    >
+      <div class="flex items-center gap-2">
+        <Rocket class="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">未检测到本机 Docker 环境</h3>
+        <Badge variant="yellow">未连接</Badge>
+      </div>
+      <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+        当前无法连接本机 Docker 守护进程，因此容器、镜像、网络、卷、编排等功能已在侧边栏隐藏。请确认 Docker 已安装并正在运行，然后点击「刷新」重试。
+      </p>
+
+      <div class="mt-4">
+        <p class="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+          <Power class="h-4 w-4 text-green-600 dark:text-green-400" />
+          检查 Docker 是否正常运行
+        </p>
+        <code class="block w-fit overflow-x-auto rounded-md bg-slate-900 px-3 py-2 font-mono text-xs text-green-300">
+          docker version
+        </code>
+        <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+          macOS 请确认已安装并启动 Docker Desktop；Linux 可执行 <code class="font-mono">sudo systemctl start docker</code>。
+        </p>
+      </div>
     </div>
 
     <!-- 资源统计（Docker 可用时显示） -->

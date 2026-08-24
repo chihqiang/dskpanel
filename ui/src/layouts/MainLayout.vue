@@ -77,6 +77,8 @@ const navItems = computed<NavItem[]>(() => {
         .filter((c) => c.path && c.meta?.menu && c.meta.title)
         // requiresSwarm 的子菜单仅在集群可用时显示。
         .filter((c) => !c.meta?.requiresSwarm || swarmEnabled.value)
+        // requiresDocker 的子菜单仅在本机 Docker 可用时显示。
+        .filter((c) => !c.meta?.requiresDocker || dockerEnabled.value)
         .map((c) => ({
           label: c.meta!.title as string,
           to: `${base}/${c.path}`,

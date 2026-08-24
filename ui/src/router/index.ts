@@ -46,15 +46,15 @@ const router = createRouter({
         {
           path: 'docker',
           component: () => import('@/views/docker/DockerView.vue'),
-          meta: { menu: true, title: 'Docker', icon: 'container', requiresDocker: true },
+          meta: { menu: true, title: 'Docker', icon: 'container' },
           children: [
             { path: '', redirect: '/docker/overview' },
             { path: 'overview', name: 'docker-overview', component: () => import('@/views/docker/OverviewView.vue'), meta: { menu: true, title: '概览' } },
-            { path: 'containers', name: 'docker-containers', component: () => import('@/views/docker/ContainersView.vue'), meta: { menu: true, title: '容器' } },
-            { path: 'images', name: 'docker-images', component: () => import('@/views/docker/ImagesView.vue'), meta: { menu: true, title: '镜像' } },
-            { path: 'networks', name: 'docker-networks', component: () => import('@/views/docker/NetworksView.vue'), meta: { menu: true, title: '网络' } },
-            { path: 'volumes', name: 'docker-volumes', component: () => import('@/views/docker/VolumesView.vue'), meta: { menu: true, title: '卷' } },
-            { path: 'compose', name: 'docker-compose', component: () => import('@/views/docker/ComposeView.vue'), meta: { menu: true, title: '编排' } },
+            { path: 'containers', name: 'docker-containers', component: () => import('@/views/docker/ContainersView.vue'), meta: { menu: true, title: '容器', requiresDocker: true } },
+            { path: 'images', name: 'docker-images', component: () => import('@/views/docker/ImagesView.vue'), meta: { menu: true, title: '镜像', requiresDocker: true } },
+            { path: 'networks', name: 'docker-networks', component: () => import('@/views/docker/NetworksView.vue'), meta: { menu: true, title: '网络', requiresDocker: true } },
+            { path: 'volumes', name: 'docker-volumes', component: () => import('@/views/docker/VolumesView.vue'), meta: { menu: true, title: '卷', requiresDocker: true } },
+            { path: 'compose', name: 'docker-compose', component: () => import('@/views/docker/ComposeView.vue'), meta: { menu: true, title: '编排', requiresDocker: true } },
           ],
         },
         {
