@@ -49,6 +49,18 @@ type Swarm struct {
 	Key string `json:"key"`
 }
 
+// K8s Kubernetes 连接配置（单一目标）。
+// Kubeconfig 为空则使用 InCluster 模式（Pod 内运行）或默认 kubeconfig 文件路径（~/.kube/config）。
+// 配置 Kubeconfig 后使用指定的 kubeconfig 内容连接远程 K8s 集群。
+type K8s struct {
+	// Kubeconfig kubeconfig 文件内容（YAML）；为空则自动检测（InCluster 或默认 kubeconfig）。
+	Kubeconfig string `json:"kubeconfig"`
+	// Master API Server 地址（如 https://192.168.1.10:6443）；为空则从 kubeconfig 推断。
+	Master string `json:"master"`
+	// Namespace 默认命名空间（为空则使用 default）。
+	Namespace string `json:"namespace"`
+}
+
 // Config 应用配置。
 type Config struct {
 	App    App                `json:"app"`
@@ -59,6 +71,7 @@ type Config struct {
 	Metric Metric             `json:"metric"`
 	Deploy Deploy             `json:"deploy"`
 	Swarm  Swarm              `json:"swarm"`
+	K8s    K8s                `json:"k8s"`
 }
 
 // App 应用基础信息。

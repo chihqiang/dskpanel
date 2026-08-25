@@ -25,6 +25,7 @@ type AppContext struct {
 	ComposeLogic   *logic.ComposeLogic
 	MetricLogic    *logic.MetricLogic
 	SwarmLogic     *logic.SwarmLogic
+	K8sLogic       *logic.K8sLogic
 }
 
 // NewAppContext 按依赖顺序装配组件：orm → migrate → 各 Logic。
@@ -51,6 +52,7 @@ func NewAppContext(cfg config.Config) (*AppContext, error) {
 		ComposeLogic:   logic.NewComposeLogic(cfg.Deploy.Dir),
 		MetricLogic:    logic.NewMetricLogic(g, cfg.Metric),
 		SwarmLogic:     logic.NewSwarmLogic(cfg.Swarm),
+		K8sLogic:       logic.NewK8sLogic(cfg.K8s),
 	}
 	return ctx, nil
 }

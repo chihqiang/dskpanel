@@ -34,3 +34,9 @@ swarm:
   ca: ""
   cert: ""
   key: ""
+
+# Kubernetes 连接配置
+k8s:
+  kubeconfig: ""
+  master: ""
+  namespace: ""

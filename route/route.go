@@ -38,6 +38,7 @@ func Register(server *httpx.Server, ctx *svc.AppContext) {
 	composeHandler := handler.NewComposeHandler(ctx)
 	metricHandler := handler.NewMetricHandler(ctx)
 	swarmHandler := handler.NewSwarmHandler(ctx)
+	k8sHandler := handler.NewK8sHandler(ctx)
 
 	// 公开路由。
 	server.AddRoute(httpx.Route{
@@ -190,4 +191,67 @@ func Register(server *httpx.Server, ctx *svc.AppContext) {
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/swarm/configs/{id}", Handler: swarmHandler.InspectConfig})
 	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/swarm/configs", Handler: swarmHandler.CreateConfig})
 	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/swarm/configs/{id}", Handler: swarmHandler.RemoveConfig})
+
+	// Kubernetes 集群管理。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/detect", Handler: k8sHandler.Detect})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/overview", Handler: k8sHandler.Overview})
+	// 事件。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/events", Handler: k8sHandler.ListEvents})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/events/{kind}/{name}", Handler: k8sHandler.ListEventsForResource})
+	// 节点。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/nodes", Handler: k8sHandler.ListNodes})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/nodes/{name}", Handler: k8sHandler.InspectNode})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/nodes/{name}/usage", Handler: k8sHandler.NodeUsage})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/nodes/{name}/cordon", Handler: k8sHandler.CordonNode})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/nodes/{name}/uncordon", Handler: k8sHandler.UncordonNode})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/nodes/{name}/drain", Handler: k8sHandler.DrainNode})
+	// 命名空间。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/namespaces", Handler: k8sHandler.ListNamespaces})
+	// Pod。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pods", Handler: k8sHandler.ListPods})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pods/{name}", Handler: k8sHandler.InspectPod})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/pods/{name}", Handler: k8sHandler.DeletePod})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pods/{name}/logs", Handler: k8sHandler.PodLogs})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/pods/{name}/exec", Handler: k8sHandler.ExecPod})
+	// Deployment。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/deployments", Handler: k8sHandler.ListDeployments})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/deployments/{name}", Handler: k8sHandler.InspectDeployment})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/deployments/{name}", Handler: k8sHandler.DeleteDeployment})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/deployments/{name}/scale", Handler: k8sHandler.ScaleDeployment})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/deployments/{name}/restart", Handler: k8sHandler.RestartDeployment})
+	// StatefulSet。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/statefulsets", Handler: k8sHandler.ListStatefulSets})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/statefulsets/{name}", Handler: k8sHandler.InspectStatefulSet})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/statefulsets/{name}", Handler: k8sHandler.DeleteStatefulSet})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/statefulsets/{name}/scale", Handler: k8sHandler.ScaleStatefulSet})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/statefulsets/{name}/restart", Handler: k8sHandler.RestartStatefulSet})
+	// DaemonSet。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/daemonsets", Handler: k8sHandler.ListDaemonSets})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/daemonsets/{name}", Handler: k8sHandler.InspectDaemonSet})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/daemonsets/{name}", Handler: k8sHandler.DeleteDaemonSet})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/daemonsets/{name}/restart", Handler: k8sHandler.RestartDaemonSet})
+	// Service。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/services", Handler: k8sHandler.ListServices})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/services/{name}", Handler: k8sHandler.InspectService})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/services/{name}", Handler: k8sHandler.DeleteService})
+	// Ingress。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/ingresses", Handler: k8sHandler.ListIngresses})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/ingresses/{name}", Handler: k8sHandler.InspectIngress})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/ingresses/{name}", Handler: k8sHandler.DeleteIngress})
+	// ConfigMap。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/configmaps", Handler: k8sHandler.ListConfigMaps})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/configmaps/{name}", Handler: k8sHandler.InspectConfigMap})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/configmaps/{name}", Handler: k8sHandler.DeleteConfigMap})
+	// Secret。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/secrets", Handler: k8sHandler.ListSecrets})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/secrets/{name}", Handler: k8sHandler.InspectSecret})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/secrets/{name}", Handler: k8sHandler.DeleteSecret})
+	// YAML 透传（kubectl apply 语义，支持多文档 YAML）。
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/apply", Handler: k8sHandler.ApplyYAML})
+	// YAML 删除（kubectl delete -f 语义，支持多文档 YAML）。
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/delete", Handler: k8sHandler.DeleteYAML})
+	// YAML 验证（kubectl apply --dry-run=server 语义）。
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/dryrun", Handler: k8sHandler.DryRunYAML})
+	// 批量删除资源（支持跨类型、跨命名空间）。
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/delete/resources", Handler: k8sHandler.DeleteResources})
 }
