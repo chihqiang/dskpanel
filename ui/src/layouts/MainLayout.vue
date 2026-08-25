@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { Container, Workflow, Boxes, Menu, X } from '@lucide/vue'
+import { Container, Workflow, Boxes, Orbit, Menu, X } from '@lucide/vue'
 import { useDockerDetect } from '@/composables/useDocker'
 import { useSwarmDetect } from '@/composables/useSwarmDetect'
+import { useK8sDetect } from '@/composables/useK8sDetect'
 import { useAuthStore } from '@/stores/auth'
 import ActivityDrawer from '@/components/ui/ActivityDrawer.vue'
 import Tooltip from '@/components/ui/Tooltip.vue'
@@ -14,6 +15,7 @@ const auth = useAuthStore()
 
 const { dockerInfo, dockerChecked, detect } = useDockerDetect()
 const { swarmStatus, detect: detectSwarm } = useSwarmDetect()
+const { k8sStatus, detect: detectK8s } = useK8sDetect()
 
 /** 桌面侧边栏折叠（仅 lg 及以上生效）。 */
 const sidebarCollapsed = ref(false)
@@ -23,6 +25,7 @@ const mobileOpen = ref(false)
 onMounted(() => {
   detect()
   detectSwarm()
+  detectK8s()
   auth.initFromToken()
 })
 
@@ -32,6 +35,10 @@ watch(route, () => {
   // 进入 Swarm 区域时强制刷新集群检测，启用/关闭后菜单能即时更新。
   if (route.path.startsWith('/swarm')) {
     void detectSwarm(true)
+  }
+  // 进入 K8s 区域时强制刷新集群检测。
+  if (route.path.startsWith('/k8s')) {
+    void detectK8s(true)
   }
 })
 
@@ -43,11 +50,15 @@ const dockerEnabled = computed(() => dockerInfo.value?.available ?? false)
 /** Swarm 集群是否可用（决定子菜单显隐）。 */
 const swarmEnabled = computed(() => swarmStatus.value?.available ?? false)
 
+/** K8s 集群是否可用（决定子菜单显隐）。 */
+const k8sEnabled = computed(() => k8sStatus.value?.available ?? false)
+
 /** 路由 meta.icon 字符串 → lucide 图标组件。 */
 const iconMap: Record<string, unknown> = {
   container: Container,
   workflow: Workflow,
   boxes: Boxes,
+  orbit: Orbit,
 }
 
 interface ChildNavItem {
@@ -77,6 +88,8 @@ const navItems = computed<NavItem[]>(() => {
         .filter((c) => c.path && c.meta?.menu && c.meta.title)
         // requiresSwarm 的子菜单仅在集群可用时显示。
         .filter((c) => !c.meta?.requiresSwarm || swarmEnabled.value)
+        // requiresK8s 的子菜单仅在集群可用时显示。
+        .filter((c) => !c.meta?.requiresK8s || k8sEnabled.value)
         // requiresDocker 的子菜单仅在本机 Docker 可用时显示。
         .filter((c) => !c.meta?.requiresDocker || dockerEnabled.value)
         .map((c) => ({

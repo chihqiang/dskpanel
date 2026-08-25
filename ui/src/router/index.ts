@@ -23,6 +23,8 @@ declare module 'vue-router' {
     badge?: string
     /** 需要 Swarm 集群可用才显示（子菜单，如节点/服务/网络/Secret）。 */
     requiresSwarm?: boolean
+    /** 需要 K8s 集群可用才显示（子菜单，如节点/Pod/工作负载）。 */
+    requiresK8s?: boolean
   }
 }
 
@@ -71,10 +73,19 @@ const router = createRouter({
           ],
         },
         {
-          path: 'kubernetes',
-          name: 'kubernetes',
-          component: () => import('@/views/PlaceholderView.vue'),
-          meta: { menu: true, title: 'Kubernetes', icon: 'boxes', badge: '即将上线' },
+          path: 'k8s',
+          component: () => import('@/views/k8s/K8sLayout.vue'),
+          meta: { menu: true, title: 'Kubernetes', icon: 'orbit' },
+          children: [
+            { path: '', redirect: '/k8s/overview' },
+            { path: 'overview', name: 'k8s-overview', component: () => import('@/views/k8s/OverviewView.vue'), meta: { menu: true, title: '概览' } },
+            { path: 'nodes', name: 'k8s-nodes', component: () => import('@/views/k8s/NodesView.vue'), meta: { menu: true, title: '节点', requiresK8s: true } },
+            { path: 'pods', name: 'k8s-pods', component: () => import('@/views/k8s/PodsView.vue'), meta: { menu: true, title: 'Pod', requiresK8s: true } },
+            { path: 'workloads', name: 'k8s-workloads', component: () => import('@/views/k8s/WorkloadsView.vue'), meta: { menu: true, title: '工作负载', requiresK8s: true } },
+            { path: 'services', name: 'k8s-services', component: () => import('@/views/k8s/ServicesView.vue'), meta: { menu: true, title: '服务', requiresK8s: true } },
+            { path: 'config', name: 'k8s-config', component: () => import('@/views/k8s/ConfigView.vue'), meta: { menu: true, title: '配置', requiresK8s: true } },
+            { path: 'events', name: 'k8s-events', component: () => import('@/views/k8s/EventsView.vue'), meta: { menu: true, title: '事件', requiresK8s: true } },
+          ],
         },
       ],
     },

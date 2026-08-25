@@ -1,9 +1,10 @@
 # dskpanel
 
-轻量容器管理工具：单机 Docker + Docker‑Swarm（Kubernetes 规划中）。
+轻量容器管理工具：单机 Docker + Docker‑Swarm + Kubernetes。
 
 - **Docker**：连接本机 Docker Engine，管理容器 / 镜像 / 网络 / 卷 / Compose 编排。
 - **Swarm**：连接目标在 `config.yaml` 的 `swarm` 段配置（`endpoint` 留空连本机，否则连远程 manager，可配 TLS 凭据）。
+- **Kubernetes**：连接目标在 `config.yaml` 的 `k8s` 段配置（`kubeconfig` 留空自动检测：InCluster / `~/.kube/config`），管理节点 / Pod / 工作负载 / Service / 配置 / 事件，支持 YAML 透传。
 
 ---
 
@@ -25,6 +26,17 @@
 - 节点：列表 / 详情 / 可用性切换（active / pause / drain）/ 删除 / join token
 - 服务：创建（**多服务 Tabs + 表单 / YAML 双模式**）/ 更新 / 伸缩 / 回滚 / 强制更新 / 删除 / 任务列表 / 日志 / **任务容器资源监控**（CPU / 内存聚合）/ 详情
 - 网络、Secret、Config 管理
+
+### Kubernetes
+
+- 概览：集群状态、统计卡、Pod 阶段分布、节点 / 资源数量汇总
+- 节点：列表 / 详情（资源使用率、标签、污点）/ Cordon / Uncordon / 驱逐（Drain）
+- Pod：列表（命名空间切换）/ 详情（容器状态、exec 命令）/ **SSE 实时日志** / 删除
+- 工作负载：Deployment / StatefulSet / DaemonSet 列表（命名空间切换）+ YAML 详情 + 伸缩 + 重启 + 删除
+- 服务：Service / Ingress 列表（类型、端口、域名）+ YAML 详情 + 删除
+- 配置：ConfigMap / Secret 列表（脱敏）+ YAML 详情 + 删除
+- 事件：集群事件列表（类型 / 原因 / 对象）
+- **YAML 透传**：模板库 + 多文档 apply / delete（`kubectl` 语义）+ 服务端 DryRun 校验
 
 ---
 
@@ -59,7 +71,7 @@ dskpanel/
         ├── stores/    # Pinia（auth / activity / dockerEvents）
         ├── templates/ # YAML 模板库（serviceSpec / compose）
         ├── utils/     # 工具（format / docker 状态映射）
-        └── views/     # 页面（docker / swarm / placeholder）
+        └── views/     # 页面（docker / swarm / k8s）
 ```
 
 ---
