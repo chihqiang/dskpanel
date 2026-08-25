@@ -1,35 +1,25 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
-	"sync"
 
-	"github.com/gorilla/websocket"
-
+	"chihqiang/dskpanel/logic"
 	"chihqiang/dskpanel/svc"
 )
 
-// upgrader WebSocket 升级器（终端专用）。
-var terminalUpgrader = websocket.Upgrader{
-	// 终端从同源前端访问，允许任意 Origin（与全局 CORS 一致）。
-	CheckOrigin: func(_ *http.Request) bool { return true },
-	// 终端是字节流，使用二进制帧传输，避免文本转义问题。
+// containerTerminalStream 将 *logic.AttachResult 适配为 WSStream。
+type containerTerminalStream struct {
+	attach *logic.AttachResult
+	resize func(execID string, rows, cols uint) error
 }
 
-// 终端 WebSocket 消息协议：
-//
-//	客户端 → 服务端（JSON 文本帧）：
-//	  {"type":"input","data":"<字符串>"}     输入（写往容器 stdin）
-//	  {"type":"resize","cols":80,"rows":24}  调整 TTY 尺寸
-//
-//	服务端 → 客户端（二进制帧）：
-//	  原始字节流（容器 stdout/stderr 内容）
-type terminalMessage struct {
-	Type string `json:"type"`
-	Data string `json:"data,omitempty"`
-	Cols int    `json:"cols,omitempty"`
-	Rows int    `json:"rows,omitempty"`
+func (s *containerTerminalStream) Read(p []byte) (int, error)  { return s.attach.Reader.Read(p) }
+func (s *containerTerminalStream) Write(p []byte) (int, error) { return s.attach.Writer.Write(p) }
+func (s *containerTerminalStream) Close() error                { return s.attach.Close() }
+
+// Resize 调整 TTY 尺寸。
+func (s *containerTerminalStream) Resize(cols, rows uint16) error {
+	return s.resize(s.attach.ExecID, uint(rows), uint(cols))
 }
 
 // TerminalHandler 容器终端（WebSocket）。
@@ -52,73 +42,16 @@ func (h *TerminalHandler) Attach(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ws, err := terminalUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		// Upgrade 失败时已由 gorilla 写入响应，无需额外处理。
-		return
-	}
-	defer ws.Close()
-
-	attach, err := h.ctx.ContainerLogic.Attach(r.Context(), id)
-	if err != nil {
-		_ = ws.WriteMessage(websocket.CloseMessage,
-			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "attach failed: "+err.Error()))
-		return
-	}
-	defer attach.Close()
-
-	var wg sync.WaitGroup
-
-	// 容器输出 → WebSocket（二进制帧）。
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		buf := make([]byte, 4096)
-		for {
-			n, err := attach.Reader.Read(buf)
-			if n > 0 {
-				if werr := ws.WriteMessage(websocket.BinaryMessage, buf[:n]); werr != nil {
-					return
-				}
-			}
-			if err != nil {
-				return
-			}
+	HandleWS(w, r, func() (WSStream, error) {
+		attach, err := h.ctx.ContainerLogic.Attach(r.Context(), id)
+		if err != nil {
+			return nil, err
 		}
-	}()
-
-	// WebSocket → 容器 stdin（JSON 消息）。
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			_, data, err := ws.ReadMessage()
-			if err != nil {
-				// 前端关闭或断线：通知容器结束。
-				return
-			}
-			var msg terminalMessage
-			if err := json.Unmarshal(data, &msg); err != nil {
-				continue
-			}
-			switch msg.Type {
-			case "input":
-				if msg.Data != "" {
-					_, _ = attach.Writer.Write([]byte(msg.Data))
-				}
-			case "resize":
-				if msg.Cols > 0 && msg.Rows > 0 {
-					_ = h.ctx.ContainerLogic.ResizeContainerTTY(r.Context(), attach.ExecID, uint(msg.Rows), uint(msg.Cols))
-				}
-			}
-		}
-	}()
-
-	// 等待任一方向结束（容器退出或 ws 断开）。
-	wg.Wait()
-	_ = attach.Close()
-
-	// 容器结束（非前端主动关闭）时，发送关闭帧通知前端。
-	_ = ws.WriteMessage(websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "container exited"))
+		return &containerTerminalStream{
+			attach: attach,
+			resize: func(execID string, rows, cols uint) error {
+				return h.ctx.ContainerLogic.ResizeContainerTTY(r.Context(), execID, rows, cols)
+			},
+		}, nil
+	})
 }
