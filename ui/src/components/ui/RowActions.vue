@@ -78,7 +78,15 @@ function onWindowClick(e: MouseEvent): void {
   }
 }
 
-function onWindowScroll(): void {
+/** 窗口滚动时关闭菜单（忽略表格内部等局部滚动）。 */
+function onWindowScroll(e: Event): void {
+  if (e.target === document || e.target === window) {
+    open.value = false
+  }
+}
+
+/** 窗口尺寸变化时关闭菜单（重新计算定位）。 */
+function onWindowResize(): void {
   open.value = false
 }
 
@@ -95,13 +103,13 @@ function handleMoreClick(a: RowAction): void {
 onMounted(() => {
   document.addEventListener('click', onWindowClick)
   window.addEventListener('scroll', onWindowScroll, true)
-  window.addEventListener('resize', onWindowScroll)
+  window.addEventListener('resize', onWindowResize)
   document.addEventListener('keydown', onWindowKeydown)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', onWindowClick)
   window.removeEventListener('scroll', onWindowScroll, true)
-  window.removeEventListener('resize', onWindowScroll)
+  window.removeEventListener('resize', onWindowResize)
   document.removeEventListener('keydown', onWindowKeydown)
 })
 </script>

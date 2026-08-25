@@ -907,37 +907,47 @@ type AttachResult struct {
 	Conn   net.Conn // hijacked 的 TCP 连接（含输入输出）
 	Reader io.Reader
 	Writer io.Writer
+	ExecID string
 	Close  func() error
 }
 
-// Attach 连接容器终端（docker attach，交互式 TTY）。
-// 返回一个可读写的双向流：写 = 发送到容器 stdin，读 = 接收容器 stdout/stderr。
+// Attach 创建容器内的交互式 shell。
+// 返回一个可读写的双向流：写 = 发送到 shell stdin，读 = 接收 shell stdout/stderr。
 // 由 handler 负责将流桥接到 WebSocket，并在结束时关闭 Conn。
 func (l *ContainerLogic) Attach(ctx context.Context, id string) (*AttachResult, error) {
-	logger.InfoCtx(ctx, "container attach", logger.String("id", id))
+	logger.InfoCtx(ctx, "container terminal exec", logger.String("id", id))
 	cli, err := l.newClient()
 	if err != nil {
-		logger.ErrorCtx(ctx, "container attach failed", logger.String("id", id), logger.Err(err))
+		logger.ErrorCtx(ctx, "container terminal exec failed", logger.String("id", id), logger.Err(err))
 		return nil, err
 	}
 
-	res, err := cli.ContainerAttach(ctx, id, client.ContainerAttachOptions{
-		Stream: true,
-		Stdin:  true,
-		Stdout: true,
-		Stderr: true,
+	created, err := cli.ExecCreate(ctx, id, client.ExecCreateOptions{
+		TTY:          true,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          []string{"/bin/sh"},
 	})
 	if err != nil {
 		cli.Close()
-		logger.ErrorCtx(ctx, "container attach failed", logger.String("id", id), logger.Err(err))
+		logger.ErrorCtx(ctx, "container terminal exec create failed", logger.String("id", id), logger.Err(err))
 		return nil, err
 	}
 
-	// 返回值内部持有 cli 引用；关闭连接时同时关闭客户端。
+	res, err := cli.ExecAttach(ctx, created.ID, client.ExecAttachOptions{TTY: true})
+	if err != nil {
+		cli.Close()
+		logger.ErrorCtx(ctx, "container terminal exec attach failed", logger.String("id", id), logger.Err(err))
+		return nil, err
+	}
+
+	// 返回值内部持有 cli 引用；关闭连接时同时关闭 exec 和客户端连接。
 	return &AttachResult{
 		Conn:   res.Conn,
 		Reader: res.Reader,
 		Writer: res.Conn,
+		ExecID: created.ID,
 		Close: func() error {
 			res.Close()
 			cli.Close()
@@ -946,20 +956,20 @@ func (l *ContainerLogic) Attach(ctx context.Context, id string) (*AttachResult, 
 	}, nil
 }
 
-// ResizeContainerTTY 调整容器 TTY 尺寸（docker resize）。
-func (l *ContainerLogic) ResizeContainerTTY(ctx context.Context, id string, rows, cols uint) error {
-	logger.InfoCtx(ctx, "container resize", logger.String("id", id), logger.Int("rows", int(rows)), logger.Int("cols", int(cols)))
+// ResizeContainerTTY 调整 exec 终端尺寸。
+func (l *ContainerLogic) ResizeContainerTTY(ctx context.Context, execID string, rows, cols uint) error {
+	logger.InfoCtx(ctx, "terminal resize", logger.String("exec_id", execID), logger.Int("rows", int(rows)), logger.Int("cols", int(cols)))
 	cli, err := l.newClient()
 	if err != nil {
 		return err
 	}
 	defer cli.Close()
-	_, err = cli.ContainerResize(ctx, id, client.ContainerResizeOptions{
+	_, err = cli.ExecResize(ctx, execID, client.ExecResizeOptions{
 		Height: rows,
 		Width:  cols,
 	})
 	if err != nil {
-		logger.ErrorCtx(ctx, "container resize failed", logger.String("id", id), logger.Err(err))
+		logger.ErrorCtx(ctx, "terminal resize failed", logger.String("exec_id", execID), logger.Err(err))
 		return err
 	}
 	return nil

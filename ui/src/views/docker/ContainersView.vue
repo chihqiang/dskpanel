@@ -169,7 +169,7 @@ function buildActions(row: ContainerItem): RowAction[] {
     { key: 'rename', label: '重命名', icon: Pencil, onClick: () => openRename(row) },
     { key: 'commit', label: '提交镜像', icon: Camera, onClick: () => openCommit(row) },
     { key: 'update', label: '更新', icon: Settings, onClick: () => openUpdate(row) },
-    { key: 'export', label: '导出', icon: FileDown, loading: exportingId === row.id, disabled: exportingId === row.id, onClick: () => doExport(row) },
+    { key: 'export', label: '导出', icon: FileDown, loading: exportingId.value === row.id, disabled: exportingId.value === row.id, onClick: () => doExport(row) },
     { key: 'remove', label: '删除', icon: Trash2, danger: true, onClick: () => openRemoveConfirm(row) },
   ]
 }

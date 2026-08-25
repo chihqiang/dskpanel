@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import Modal from '@/components/ui/Modal.vue'
-import { useToast } from '@/composables/useToast'
 import { swarmNetworkInspect, type SwarmNetworkItem } from '@/api/swarm'
 
 const props = defineProps<{
@@ -10,8 +9,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
-
-const toast = useToast()
 
 const detail = ref('')
 const detailLoading = ref(false)

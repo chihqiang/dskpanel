@@ -43,6 +43,7 @@ let term: XTerm | null = null
 let fitAddon: FitAddon | null = null
 let ws: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let mountTimer: ReturnType<typeof setTimeout> | null = null
 let disposed = false
 let termReady = false
 
@@ -97,7 +98,8 @@ function initTerminal(): void {
   term.loadAddon(new WebLinksAddon())
   term.open(containerRef.value)
   termReady = true
-  fit()
+  // 延迟 fit：等待容器尺寸稳定（Modal Transition 动画期间尺寸可能不正确）。
+  requestAnimationFrame(() => fit())
 
   // 用户输入 → WebSocket（作为 input 消息）。
   term.onData((data) => {
@@ -142,7 +144,8 @@ function connect(): void {
     setStatus('已连接', 'text-green-500')
     emit('status', 'connected')
     // 连接建立后同步一次尺寸 + 发送初始命令。
-    fit()
+    // 延迟到下一帧再 fit，确保 Modal Transition 动画完成、容器尺寸已确定。
+    requestAnimationFrame(() => fit())
     if (props.initialCommand) {
       ws?.send(JSON.stringify({ type: 'input', data: props.initialCommand }))
     }
@@ -199,6 +202,10 @@ function toggle(): void {
   }
 }
 
+function focusTerminal(): void {
+  term?.focus()
+}
+
 watch(
   () => props.url,
   () => {
@@ -209,14 +216,23 @@ watch(
 
 onMounted(async () => {
   initTerminal()
+  // 等待 Modal Transition 动画完成（0.15s）后再连接，确保容器尺寸已确定。
   await nextTick()
-  if (props.autoConnect) connect()
+  mountTimer = setTimeout(() => {
+    // 主动聚焦 xterm，避免被 Modal 的 focus trap 抢到按钮上导致无法输入。
+    focusTerminal()
+    if (props.autoConnect) connect()
+  }, 160)
   // 监听尺寸变化自适应。
   window.addEventListener('resize', fit)
 })
 
 onBeforeUnmount(() => {
   disposed = true
+  if (mountTimer) {
+    clearTimeout(mountTimer)
+    mountTimer = null
+  }
   disconnect()
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
@@ -226,7 +242,7 @@ onBeforeUnmount(() => {
   term = null
 })
 
-defineExpose({ connect, disconnect, fit, focus: () => term?.focus() })
+defineExpose({ connect, disconnect, fit, focus: focusTerminal })
 </script>
 
 <template>
@@ -247,8 +263,14 @@ defineExpose({ connect, disconnect, fit, focus: () => term?.focus() })
         </button>
       </div>
     </div>
-    <!-- xterm 容器 -->
-    <div ref="containerRef" :class="height" class="w-full bg-slate-900 p-2" />
+    <!-- xterm 容器：tabindex=0 使其可聚焦，点击/打开时自动聚焦以接收键盘输入 -->
+    <div
+      ref="containerRef"
+      :class="height"
+      class="w-full cursor-text bg-slate-900 p-2 outline-none"
+      tabindex="0"
+      @click="focusTerminal"
+    />
   </div>
 </template>
 

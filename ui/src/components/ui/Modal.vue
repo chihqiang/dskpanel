@@ -8,14 +8,17 @@ const props = withDefaults(
     title?: string
     width?: string
     closeOnBackdrop?: boolean
+    /** 禁用焦点陷阱（终端等需要原生键盘输入的场景）。 */
+    disableFocusTrap?: boolean
   }>(),
-  { title: '', width: 'max-w-lg', closeOnBackdrop: true },
+  { title: '', width: 'max-w-lg', closeOnBackdrop: true, disableFocusTrap: false },
 )
 
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
 const panel = ref<HTMLElement | null>(null)
-useFocusTrap(panel, () => props.open)
+// 终端场景禁用焦点陷阱，避免 Tab 等按键被拦截导致无法输入。
+useFocusTrap(panel, () => props.open && !props.disableFocusTrap)
 
 function close(): void {
   emit('update:open', false)

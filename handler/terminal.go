@@ -108,7 +108,7 @@ func (h *TerminalHandler) Attach(w http.ResponseWriter, r *http.Request) {
 				}
 			case "resize":
 				if msg.Cols > 0 && msg.Rows > 0 {
-					_ = h.ctx.ContainerLogic.ResizeContainerTTY(r.Context(), id, uint(msg.Rows), uint(msg.Cols))
+					_ = h.ctx.ContainerLogic.ResizeContainerTTY(r.Context(), attach.ExecID, uint(msg.Rows), uint(msg.Cols))
 				}
 			}
 		}
