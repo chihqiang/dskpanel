@@ -1,325 +1,199 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
-import YAML from 'yaml'
-import { Rocket } from '@lucide/vue'
+import { onMounted, ref } from 'vue'
+import { Rocket, RefreshCw, Play, Square, RotateCw, Trash2, Eye, FileText, Layers } from '@lucide/vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
-import Modal from '@/components/ui/Modal.vue'
-import ProgressBar from '@/components/ui/ProgressBar.vue'
-import SpecEditorBody from '@/components/ui/SpecEditorBody.vue'
-import type { SpecField } from '@/components/ui/SpecEditorModal.vue'
-import ComposeProjects from '@/components/docker/ComposeProjects.vue'
-import {
-  validateCompose,
-  deployComposeStream,
-} from '@/api/compose'
+import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
+import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
+import { ComposeDeployModal, ComposeProjectDetailModal, ComposeProjectLogsModal } from '@/components/docker'
 import { useToast } from '@/composables/useToast'
-import { composeTemplates } from '@/templates'
-
-/** 部署弹窗内的编辑器实例。 */
-const bodyRef = ref<InstanceType<typeof SpecEditorBody> | null>(null)
-
-/** 项目列表组件实例（部署成功后刷新）。 */
-const projectsRef = ref<InstanceType<typeof ComposeProjects> | null>(null)
-
-/** 部署弹窗开关。 */
-const deployOpen = ref(false)
-
-/** 表单模型：项目名 + 服务列表 + 自定义网络/卷。 */
-const form = ref<Record<string, any>>({
-  name: '',
-  services: [],
-  networks: '',
-  volumes: '',
-})
-const result = ref<{ ok: boolean; message: string } | null>(null)
-
-/** 模板选择：选择即自动回填表单（immediate 首次加载默认模板）。 */
-const selectedTemplate = ref(composeTemplates[0]?.name ?? '')
-watch(selectedTemplate, (name) => {
-  const tpl = composeTemplates.find((t) => t.name === name)
-  if (!tpl) return
-  form.value = yamlToForm(tpl.yaml)
-  result.value = null
-}, { immediate: true })
-
-/** Compose 表单字段 schema。 */
-const fields: SpecField[] = [
-  {
-    key: 'name',
-    label: '项目名',
-    type: 'text',
-    placeholder: '留空自动生成唯一项目名',
-    help: '填写相同项目名将更新该 Compose 项目；留空则创建独立新项目',
-    span: 6,
-  },
-  {
-    key: 'services',
-    label: '服务',
-    type: 'list',
-    addLabel: '添加服务',
-    span: 6,
-    layout: 'tabs',
-    fields: [
-      { key: 'name', label: '服务名', type: 'text', placeholder: '例如 web', widthClass: 'w-44' },
-      { key: 'image', label: '镜像', type: 'text', placeholder: '例如 nginx:latest', widthClass: 'flex-1' },
-      {
-        key: 'restart',
-        label: '重启策略',
-        type: 'select',
-        widthClass: 'w-36',
-        options: [
-          { value: 'no', label: 'no' },
-          { value: 'always', label: 'always' },
-          { value: 'on-failure', label: 'on-failure' },
-          { value: 'unless-stopped', label: 'unless-stopped' },
-        ],
-      },
-      { key: 'ports', label: '端口映射（每行一个，如 8080:80）', type: 'textarea', rows: 3, placeholder: '8080:80' },
-      { key: 'environment', label: '环境变量（每行 KEY=VALUE）', type: 'textarea', rows: 3, placeholder: 'NGINX_HOST=example.com' },
-      { key: 'volumes', label: '卷挂载（每行一个，如 ./data:/data）', type: 'textarea', rows: 2, placeholder: './data:/data' },
-    ],
-  },
-  { key: 'networks', label: '自定义网络（每行一个，可选）', type: 'textarea', span: 3, rows: 3, placeholder: 'frontend\nbackend' },
-  { key: 'volumes', label: '命名卷（每行一个，可选）', type: 'textarea', span: 3, rows: 3, placeholder: 'dbdata' },
-]
-
-/** 表单 → Compose YAML。 */
-function formToYaml(f: Record<string, any>): string {
-  if (!f.services?.length) {
-    throw new Error('至少需要一个服务')
-  }
-  const project: Record<string, any> = {}
-  // 项目名：留空时自动生成唯一名（Compose 同名=更新、唯一名=新建，避免误覆盖已有项目）。
-  project.name = f.name?.trim() || `compose-${Date.now()}`
-  project.services = {}
-  for (const s of f.services) {
-    if (!s.name || !s.image) {
-      throw new Error(`服务「${s.name || '?'}」需填写名称与镜像`)
-    }
-    const svc: Record<string, any> = { image: s.image }
-    if (s.ports?.trim()) {
-      svc.ports = s.ports
-        .split('\n')
-        .map((t: string) => t.trim())
-        .filter(Boolean)
-    }
-    if (s.environment?.trim()) {
-      svc.environment = s.environment
-        .split('\n')
-        .map((t: string) => t.trim())
-        .filter(Boolean)
-    }
-    if (s.volumes?.trim()) {
-      svc.volumes = s.volumes
-        .split('\n')
-        .map((t: string) => t.trim())
-        .filter(Boolean)
-    }
-    if (s.restart) svc.restart = s.restart
-    project.services[s.name] = svc
-  }
-  if (f.networks?.trim()) {
-    project.networks = {}
-    for (const n of f.networks.split('\n').map((t: string) => t.trim()).filter(Boolean)) {
-      project.networks[n] = null
-    }
-  }
-  if (f.volumes?.trim()) {
-    project.volumes = {}
-    for (const v of f.volumes.split('\n').map((t: string) => t.trim()).filter(Boolean)) {
-      project.volumes[v] = null
-    }
-  }
-  return YAML.stringify(project)
-}
-
-/** Compose YAML → 表单。 */
-function yamlToForm(yamlText: string): Record<string, any> {
-  const parsed = YAML.parse(yamlText) || {}
-  const services: Record<string, any>[] = []
-  for (const [name, s] of Object.entries<any>(parsed.services ?? {})) {
-    services.push({
-      name,
-      image: s.image ?? '',
-      restart: s.restart ?? 'no',
-      ports: (s.ports ?? []).join('\n'),
-      environment: (s.environment ?? []).join('\n'),
-      volumes: (s.volumes ?? []).join('\n'),
-    })
-  }
-  return {
-    name: parsed.name ?? '',
-    services,
-    networks: parsed.networks ? Object.keys(parsed.networks).join('\n') : '',
-    volumes: parsed.volumes ? Object.keys(parsed.volumes).join('\n') : '',
-  }
-}
-
-const validating = ref(false)
-const deploying = ref(false)
-const deployLines = ref<string[]>([])
-const deployDone = ref(false)
-const deployOk = ref(false)
-let stopDeploy: (() => void) | null = null
+import { useConfirm } from '@/composables/useConfirm'
+import {
+  listComposeProjects,
+  composeProjectStart,
+  composeProjectStop,
+  composeProjectRestart,
+  composeProjectDown,
+  type ComposeProjectItem,
+} from '@/api/compose'
 
 const toast = useToast()
+const confirm = useConfirm()
 
-/** 取当前编辑器内容（表单模式自动转 YAML）。 */
-function currentContent(): string | null {
-  return bodyRef.value?.getYamlText() ?? null
+// ---- 项目列表 ----
+const projects = ref<ComposeProjectItem[]>([])
+const loading = ref(false)
+const error = ref('')
+const actionName = ref('')
+
+// ---- 部署弹窗 ----
+const deployOpen = ref(false)
+
+// ---- 详情弹窗 ----
+const detailOpen = ref(false)
+const detailProject = ref<ComposeProjectItem | null>(null)
+
+// ---- 日志弹窗 ----
+const logsOpen = ref(false)
+const logsProject = ref<ComposeProjectItem | null>(null)
+
+async function load(): Promise<void> {
+  loading.value = true
+  error.value = ''
+  try {
+    projects.value = await listComposeProjects()
+  } catch (err) {
+    error.value = (err as Error).message
+    projects.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
-async function onValidate(): Promise<void> {
-  const content = currentContent()
-  if (!content) {
-    toast.error('请先填写 Compose 定义')
-    return
-  }
-  validating.value = true
-  result.value = null
+onMounted(load)
+
+/** 项目状态（形如 "running(2), exited(1)"）→ Badge 变体。 */
+function statusVariant(status: string): 'green' | 'red' | 'yellow' | 'gray' {
+  if (!status) return 'gray'
+  if (status.includes('running') || status.includes('restarting')) return 'green'
+  if (status.includes('exited') || status.includes('dead')) return 'red'
+  if (status.includes('paused')) return 'yellow'
+  return 'gray'
+}
+
+async function runAction(name: string, fn: () => Promise<unknown>, msg: string): Promise<void> {
+  actionName.value = name
   try {
-    result.value = await validateCompose(content)
+    await fn()
+    toast.success(msg)
+    void load()
   } catch (err) {
     toast.error((err as Error).message)
   } finally {
-    validating.value = false
+    actionName.value = ''
   }
 }
 
-function onDeploy(): void {
-  const content = currentContent()
-  if (!content) {
-    toast.error('请先填写 Compose 定义')
-    return
-  }
-  // 防御：若存在上一次未结束的部署流，先终止再创建新流。
-  stopDeploy?.()
-  deploying.value = true
-  deployLines.value = []
-  deployDone.value = false
-  result.value = null
-
-  stopDeploy = deployComposeStream(
-    content,
-    (line) => {
-      deployLines.value.push(line)
-      scrollDeployToBottom()
-    },
-    async (success) => {
-      deployOk.value = success
-      deployDone.value = true
-      deploying.value = false
-      if (success) {
-        toast.success('Compose 应用部署成功')
-        // 部署成功后刷新下方项目列表。
-        void projectsRef.value?.load()
-      }
-    },
-    (msg) => {
-      toast.error(msg)
-      deploying.value = false
-    },
-  )
+function onStart(row: ComposeProjectItem): void {
+  void runAction(row.name, () => composeProjectStart(row.name), `项目「${row.name}」已启动`)
 }
 
-function reset(): void {
-  stopDeploy?.()
-  stopDeploy = null
-  // 预填示例表单（模板库首个案例，通过触发 selectedTemplate watch 加载）。
-  selectedTemplate.value = composeTemplates[0]?.name ?? ''
-  bodyRef.value?.setYaml('')
-  deployLines.value = []
-  deployDone.value = false
-  result.value = null
+function onStop(row: ComposeProjectItem): void {
+  void runAction(row.name, () => composeProjectStop(row.name), `项目「${row.name}」已停止`)
 }
 
-watch(
-  () => form.value,
-  () => {
-    // 表单变化时清空旧的部署/校验结果，避免与内容不一致。
-    result.value = null
-  },
-)
+function onRestart(row: ComposeProjectItem): void {
+  void runAction(row.name, () => composeProjectRestart(row.name), `项目「${row.name}」已重启`)
+}
 
-/** 部署输出自动滚动到底部。 */
-const deployBox = ref<HTMLElement | null>(null)
-function scrollDeployToBottom(): void {
-  requestAnimationFrame(() => {
-    if (deployBox.value) deployBox.value.scrollTop = deployBox.value.scrollHeight
+function onDown(row: ComposeProjectItem): void {
+  void confirm({
+    title: '移除 Compose 项目',
+    message: `确定移除项目「${row.name}」？将停止并删除其容器与网络。`,
+    danger: true,
+    confirmText: '移除',
+    onConfirm: () => composeProjectDown(row.name),
+    onSuccess: () => {
+      toast.success(`项目「${row.name}」已移除`)
+      void load()
+    },
   })
 }
 
-onBeforeUnmount(() => {
-  stopDeploy?.()
-  stopDeploy = null
-})
+function openDetail(row: ComposeProjectItem): void {
+  detailProject.value = row
+  detailOpen.value = true
+}
+
+function openLogs(row: ComposeProjectItem): void {
+  logsProject.value = row
+  logsOpen.value = true
+}
+
+const columns: DataTableColumn[] = [
+  { key: 'name', label: '项目名' },
+  { key: 'status', label: '状态' },
+  { key: 'services', label: '服务', align: 'center', width: '90px' },
+  { key: 'containers', label: '容器', align: 'center', width: '120px' },
+  { key: 'config', label: '配置文件', ellipsis: true },
+  { key: 'actions', label: '操作', align: 'right', width: '140px' },
+]
+
+function actionsFor(row: ComposeProjectItem): RowAction[] {
+  const busy = actionName.value === row.name
+  // 全部容器已运行 → 禁用启动；全部已停止 → 禁用停止/重启。
+  const allRunning = row.running > 0 && row.running >= row.total
+  const allStopped = row.running === 0
+  return [
+    { key: 'detail', label: '详情', icon: Eye, onClick: () => openDetail(row) },
+    { key: 'logs', label: '日志', icon: FileText, onClick: () => openLogs(row) },
+    { key: 'start', label: '启动', icon: Play, disabled: busy || allRunning, loading: busy, onClick: () => onStart(row) },
+    { key: 'stop', label: '停止', icon: Square, disabled: busy || allStopped, loading: busy, onClick: () => onStop(row) },
+    { key: 'restart', label: '重启', icon: RotateCw, disabled: busy || allStopped, loading: busy, onClick: () => onRestart(row) },
+    { key: 'down', label: '移除', icon: Trash2, danger: true, disabled: busy, onClick: () => onDown(row) },
+  ]
+}
 </script>
 
 <template>
   <div class="space-y-5">
-    <!-- 项目列表（参考 /swarm/services：DataTable 列表 + 工具栏按钮） -->
-    <ComposeProjects ref="projectsRef">
-      <template #deploy>
+    <!-- 项目列表 -->
+    <DataTable
+      title="Compose 项目"
+      :columns="columns"
+      :data="projects"
+      :loading="loading"
+      :error="error"
+      row-key="name"
+      empty-text="暂无 Compose 项目，可先点击右上角「部署编排」创建"
+      @retry="load"
+    >
+      <template #toolbar>
         <Button size="sm" @click="deployOpen = true">
           <Rocket class="h-3.5 w-3.5" />
           部署编排
         </Button>
+        <Button variant="secondary" size="sm" :loading="loading" @click="load">
+          <RefreshCw class="h-4 w-4" />
+          刷新
+        </Button>
       </template>
-    </ComposeProjects>
-
-    <!-- 部署编排弹窗（参考 /swarm/services：创建类操作走 Modal） -->
-    <Modal :open="deployOpen" @update:open="deployOpen = $event" title="部署 Compose" width="max-w-3xl">
-      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Compose 定义</span>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-slate-400">模板：</span>
-          <select v-model="selectedTemplate" class="input input-sm w-44">
-            <option v-for="t in composeTemplates" :key="t.name" :value="t.name">{{ t.name }}</option>
-          </select>
+      <template #cell-name="{ row }">
+        <div class="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100">
+          <Layers class="h-4 w-4 shrink-0 text-slate-400" />
+          {{ (row as ComposeProjectItem).name }}
         </div>
-      </div>
-
-      <SpecEditorBody
-        ref="bodyRef"
-        v-model:form="form"
-        :fields="fields"
-        :form-to-yaml="formToYaml"
-        :yaml-to-form="yamlToForm"
-        yaml-placeholder="# 在此粘贴或编辑 Compose 文件 YAML&#10;services:&#10;  web:&#10;    image: nginx:latest"
-      />
-
-      <!-- 校验结果 -->
-      <div v-if="result" class="mt-3 flex items-start gap-2">
-        <Badge :variant="result.ok ? 'green' : 'red'">{{ result.ok ? '校验成功' : '校验失败' }}</Badge>
-        <pre class="min-w-0 flex-1 whitespace-pre-wrap break-all rounded-md bg-slate-900 p-3 text-xs text-slate-100">{{ result.message }}</pre>
-      </div>
-
-      <!-- 部署实时回显 -->
-      <div v-if="deploying || deployDone || deployLines.length > 0" class="mt-3 space-y-2">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-slate-700 dark:text-slate-200">部署输出</span>
-          <Badge v-if="deploying" variant="blue">部署中...</Badge>
-          <Badge v-else-if="deployDone" :variant="deployOk ? 'green' : 'red'">
-            {{ deployOk ? '部署成功' : '部署失败' }}
-          </Badge>
-        </div>
-        <!-- 部署进行中进度条（命令式部署无法量化，用不确定动画） -->
-        <ProgressBar v-if="deploying" :value="0" indeterminate :height="4" />
-        <div
-          ref="deployBox"
-          class="max-h-64 overflow-y-auto rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100"
+      </template>
+      <template #cell-status="{ row }">
+        <Badge :variant="statusVariant((row as ComposeProjectItem).status)" dot>
+          {{ (row as ComposeProjectItem).status || 'unknown' }}
+        </Badge>
+      </template>
+      <template #cell-containers="{ row }">
+        <span :class="(row as ComposeProjectItem).running > 0 ? 'text-green-600' : 'text-slate-400'">
+          {{ (row as ComposeProjectItem).running }}/{{ (row as ComposeProjectItem).total }}
+        </span>
+      </template>
+      <template #cell-config="{ row }">
+        <span
+          class="block truncate font-mono text-xs text-slate-500 dark:text-slate-400"
+          :title="(row as ComposeProjectItem).config_files"
         >
-          <div v-for="(line, idx) in deployLines" :key="idx" class="whitespace-pre-wrap break-all">{{ line }}</div>
-          <div v-if="deploying && deployLines.length === 0" class="text-slate-500">部署中...</div>
-        </div>
-      </div>
-
-      <template #footer>
-        <Button variant="secondary" @click="reset">重置</Button>
-        <Button variant="secondary" :loading="validating" @click="onValidate">校验</Button>
-        <Button :loading="deploying" @click="onDeploy">部署</Button>
+          {{ (row as ComposeProjectItem).config_files || '-' }}
+        </span>
       </template>
-    </Modal>
+      <template #cell-actions="{ row }">
+        <RowActions :actions="actionsFor(row as ComposeProjectItem)" :visible="3" />
+      </template>
+    </DataTable>
+
+    <!-- 部署编排弹窗 -->
+    <ComposeDeployModal v-model:open="deployOpen" @deployed="load" />
+
+    <!-- 项目详情 -->
+    <ComposeProjectDetailModal v-model:open="detailOpen" :project="detailProject" />
+
+    <!-- 项目日志 -->
+    <ComposeProjectLogsModal v-model:open="logsOpen" :project="logsProject" />
   </div>
 </template>

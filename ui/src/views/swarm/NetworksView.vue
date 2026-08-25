@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Plus, Eye, Trash2, RefreshCw } from '@lucide/vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
-import Modal from '@/components/ui/Modal.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
+import { SwarmNetworkCreateModal, SwarmNetworkDetailModal } from '@/components/swarm'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import {
   swarmNetworks,
-  swarmCreateNetwork,
-  swarmNetworkInspect,
   swarmRemoveNetwork,
   type SwarmNetworkItem,
 } from '@/api/swarm'
@@ -28,18 +26,9 @@ const filteredItems = computed(() => items.value.filter((n) => n.scope === 'swar
 
 const createOpen = ref(false)
 const createKind = ref<'overlay' | 'bridge'>('overlay')
-const form = reactive({
-  name: '',
-  subnet: '',
-  gateway: '',
-  attachable: true,
-  internal: false,
-})
-const saving = ref(false)
 
 const detailOpen = ref(false)
-const detail = ref('')
-const detailLoading = ref(false)
+const detailNetwork = ref<SwarmNetworkItem | null>(null)
 
 async function load(): Promise<void> {
   loading.value = true
@@ -57,51 +46,12 @@ onMounted(load)
 
 function openCreate(kind: 'overlay' | 'bridge'): void {
   createKind.value = kind
-  form.name = ''
-  form.subnet = ''
-  form.gateway = ''
-  form.attachable = true
-  form.internal = false
   createOpen.value = true
 }
 
-async function submit(): Promise<void> {
-  if (!form.name) {
-    toast.error('请输入网络名称')
-    return
-  }
-  saving.value = true
-  try {
-    await swarmCreateNetwork({
-      name: form.name,
-      driver: createKind.value,
-      subnet: form.subnet || undefined,
-      gateway: form.gateway || undefined,
-      attachable: form.attachable,
-      internal: form.internal,
-    })
-    toast.success(`网络「${form.name}」已创建`)
-    createOpen.value = false
-    await load()
-  } catch (err) {
-    toast.error((err as Error).message)
-  } finally {
-    saving.value = false
-  }
-}
-
-async function openDetail(row: SwarmNetworkItem): Promise<void> {
+function openDetail(row: SwarmNetworkItem): void {
+  detailNetwork.value = row
   detailOpen.value = true
-  detail.value = ''
-  detailLoading.value = true
-  try {
-    const raw = await swarmNetworkInspect(row.id)
-    detail.value = JSON.stringify(raw, null, 2)
-  } catch (err) {
-    detail.value = `加载失败: ${(err as Error).message}`
-  } finally {
-    detailLoading.value = false
-  }
 }
 
 function removeNetwork(row: SwarmNetworkItem): void {
@@ -171,51 +121,9 @@ const columns: DataTableColumn[] = [
     </DataTable>
 
     <!-- 创建网络 -->
-    <Modal :open="createOpen" @update:open="createOpen = $event" title="新建 Swarm 网络" width="max-w-lg">
-      <div class="space-y-4">
-        <div>
-          <label class="mb-1.5 block text-sm text-slate-500">类型</label>
-          <select v-model="createKind" class="input">
-            <option value="overlay">overlay（Swarm 专用）</option>
-            <option value="bridge">bridge（本地）</option>
-          </select>
-        </div>
-        <div>
-          <label class="mb-1.5 block text-sm text-slate-500">名称 *</label>
-          <input v-model="form.name" class="input font-mono" placeholder="例如 app-net" />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="mb-1.5 block text-sm text-slate-500">子网（可选）</label>
-            <input v-model="form.subnet" class="input font-mono" placeholder="例如 10.0.1.0/24" />
-          </div>
-          <div>
-            <label class="mb-1.5 block text-sm text-slate-500">网关（可选）</label>
-            <input v-model="form.gateway" class="input font-mono" placeholder="例如 10.0.1.1" />
-          </div>
-        </div>
-        <div class="flex gap-6">
-          <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <input v-model="form.attachable" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600" />
-            允许独立容器连接
-          </label>
-          <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <input v-model="form.internal" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600" />
-            内部网络（禁止外部访问）
-          </label>
-        </div>
-      </div>
-      <template #footer>
-        <Button variant="secondary" @click="createOpen = false">取消</Button>
-        <Button :loading="saving" @click="submit">创建</Button>
-      </template>
-    </Modal>
+    <SwarmNetworkCreateModal v-model:open="createOpen" :kind="createKind" @created="load" />
 
     <!-- 网络详情 -->
-    <Modal :open="detailOpen" @update:open="detailOpen = $event" title="网络详情" width="max-w-3xl">
-      <pre
-        class="max-h-[70vh] overflow-auto rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-700 dark:bg-slate-900 dark:text-slate-300"
-      >{{ detailLoading ? '加载中…' : detail }}</pre>
-    </Modal>
+    <SwarmNetworkDetailModal v-model:open="detailOpen" :network="detailNetwork" />
   </div>
 </template>

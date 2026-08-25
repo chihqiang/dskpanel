@@ -14,6 +14,9 @@ import CreateNetworkModal from './CreateNetworkModal.vue'
 import CreateVolumeModal from './CreateVolumeModal.vue'
 import NetworkDetailModal from './NetworkDetailModal.vue'
 import VolumeDetailModal from './VolumeDetailModal.vue'
+import ComposeDeployModal from './ComposeDeployModal.vue'
+import ComposeProjectDetailModal from './ComposeProjectDetailModal.vue'
+import ComposeProjectLogsModal from './ComposeProjectLogsModal.vue'
 
 export {
   CreateContainerModal,
@@ -32,4 +35,7 @@ export {
   CreateVolumeModal,
   NetworkDetailModal,
   VolumeDetailModal,
+  ComposeDeployModal,
+  ComposeProjectDetailModal,
+  ComposeProjectLogsModal,
 }

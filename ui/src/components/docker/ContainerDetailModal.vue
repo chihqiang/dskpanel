@@ -191,7 +191,7 @@ function fmtPorts(ports?: Record<string, { private_port: number; public_port?: n
       <div v-if="editing" class="space-y-4">
         <div class="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
           <Pencil class="h-4 w-4" />编辑容器配置
-          <span class="text-xs text-blue-500 dark:text-blue-400">（仅资源限制与重启策略可运行时修改）</span>
+          <span class="text-xs text-blue-500 dark:text-blue-400">（资源限制与重启策略随时可修改，重命名亦可）</span>
         </div>
         <div>
           <label class="mb-1 block text-xs text-slate-500">容器名称</label>

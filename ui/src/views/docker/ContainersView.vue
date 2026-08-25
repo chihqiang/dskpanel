@@ -136,8 +136,8 @@ function buildActions(row: ContainerItem): RowAction[] {
   return [
     { key: 'copyid', label: '复制 ID', icon: Copy, onClick: () => copyId(row) },
     { key: 'logs', label: '日志', icon: FileText, onClick: () => openLogs(row) },
-    { key: 'terminal', label: '终端', icon: Terminal, onClick: () => openTerminal(row) },
-    { key: 'stats', label: '监控', icon: Activity, onClick: () => openStats(row) },
+    { key: 'terminal', label: '终端', icon: Terminal, disabled: !running, onClick: () => openTerminal(row) },
+    { key: 'stats', label: '监控', icon: Activity, disabled: !running, onClick: () => openStats(row) },
     {
       key: 'pause',
       label: paused ? '恢复' : '暂停',
@@ -149,7 +149,7 @@ function buildActions(row: ContainerItem): RowAction[] {
       key: 'stop',
       label: '停止',
       icon: Square,
-      disabled: !running,
+      disabled: !running && !paused,
       onClick: () => doAction(() => stopContainer(row.id), `已停止「${name}」`),
     },
     {
@@ -163,12 +163,13 @@ function buildActions(row: ContainerItem): RowAction[] {
       key: 'restart',
       label: '重启',
       icon: RotateCw,
+      disabled: !running,
       onClick: () => doAction(() => restartContainer(row.id), `已重启「${name}」`),
     },
     { key: 'rename', label: '重命名', icon: Pencil, onClick: () => openRename(row) },
     { key: 'commit', label: '提交镜像', icon: Camera, onClick: () => openCommit(row) },
     { key: 'update', label: '更新', icon: Settings, onClick: () => openUpdate(row) },
-    { key: 'export', label: '导出', icon: FileDown, onClick: () => doExport(row) },
+    { key: 'export', label: '导出', icon: FileDown, loading: exportingId === row.id, disabled: exportingId === row.id, onClick: () => doExport(row) },
     { key: 'remove', label: '删除', icon: Trash2, danger: true, onClick: () => openRemoveConfirm(row) },
   ]
 }

@@ -135,6 +135,8 @@ const columns: DataTableColumn[] = [
               variant="ghost"
               size="sm"
               class="!text-red-600"
+              :disabled="(row as VolumeItem).used"
+              :title="(row as VolumeItem).used ? '卷被容器使用中，无法删除' : ''"
               @click="openRemoveConfirm(row as VolumeItem)"
             >
               删除

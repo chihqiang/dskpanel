@@ -196,7 +196,7 @@ function buildImageActions(image: ImageItem): RowAction[] {
     { key: 'detail', label: '详情', icon: Eye, onClick: () => openDetail(image) },
     { key: 'copyid', label: '复制 ID', icon: Copy, onClick: () => copyId(image) },
     { key: 'tag', label: '打标签', icon: Tag, onClick: () => openTag(image) },
-    { key: 'push', label: '推送', icon: Upload, onClick: () => openPush(image) },
+    { key: 'push', label: '推送', icon: Upload, disabled: image.repo_tags.length === 0, onClick: () => openPush(image) },
     { key: 'run', label: '运行', icon: Play, onClick: () => openRun(image) },
     { key: 'export', label: '导出', icon: FileDown, onClick: () => openExport(image) },
     { key: 'remove', label: '删除', icon: Trash2, danger: true, onClick: () => openRemoveConfirm(image) },
