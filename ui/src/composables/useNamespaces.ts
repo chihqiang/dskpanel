@@ -16,6 +16,9 @@ const SEARCH_HIST_KEY = 'dskpanel_k8s_ns_search_hist'
 const MAX_RECENT = 8
 const MAX_SEARCH_HIST = 8
 
+/** 「所有命名空间」特殊值（后端识别为列出全部命名空间的资源）。 */
+export const ALL_NS = 'all'
+
 /** 从 localStorage 读取字符串数组（容错解析）。 */
 function loadList(key: string): string[] {
   try {
@@ -77,8 +80,12 @@ async function loadNamespaces(force = false): Promise<void> {
   try {
     namespaces.value = await k8sNamespaces()
     loaded.value = true
-    // 当前命名空间可能已被删除 → 回退到第一个。
-    if (namespaces.value.length && !namespaces.value.some((n) => n.name === current.value)) {
+    // 当前命名空间可能已被删除 → 回退到第一个（all 不参与校验）。
+    if (
+      current.value !== ALL_NS &&
+      namespaces.value.length &&
+      !namespaces.value.some((n) => n.name === current.value)
+    ) {
       setCurrent(namespaces.value[0].name)
     }
   } catch {

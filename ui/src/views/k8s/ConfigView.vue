@@ -8,7 +8,7 @@ import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
 import { ResourceDetailModal, ResourceToolbar, YamlCreateModal } from '@/components/k8s'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
-import { useNamespaces } from '@/composables/useNamespaces'
+import { useNamespaces, ALL_NS } from '@/composables/useNamespaces'
 import { k8sConfigTemplates } from '@/templates'
 import {
   k8sConfigMaps,
@@ -128,9 +128,14 @@ const secColumns: DataTableColumn[] = [
   { label: '操作', key: 'actions', width: '120px', align: 'right' },
 ]
 
-const currentColumns = computed<DataTableColumn[]>(() =>
-  activeTab.value === 'configmap' ? cmColumns : secColumns,
-)
+const currentColumns = computed<DataTableColumn[]>(() => {
+  const cols = [...(activeTab.value === 'configmap' ? cmColumns : secColumns)]
+  // 所有命名空间模式下展示命名空间列。
+  if (namespace.value === ALL_NS) {
+    cols.splice(1, 0, { label: '命名空间', key: 'namespace', width: '140px' })
+  }
+  return cols
+})
 </script>
 
 <template>

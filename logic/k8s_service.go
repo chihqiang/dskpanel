@@ -42,10 +42,7 @@ func (l *K8sLogic) ListServicesWithOptions(ctx context.Context, opts K8sListOpti
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if opts.Namespace != "" {
-		ns = opts.Namespace
-	}
+	ns := l.resolveNamespace(opts.Namespace)
 
 	svcList, err := cli.CoreV1().Services(ns).List(ctx, opts.toListOptions())
 	if err != nil {
@@ -148,10 +145,7 @@ func (l *K8sLogic) ListIngressesWithOptions(ctx context.Context, opts K8sListOpt
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if opts.Namespace != "" {
-		ns = opts.Namespace
-	}
+	ns := l.resolveNamespace(opts.Namespace)
 	ingList, err := cli.NetworkingV1().Ingresses(ns).List(ctx, opts.toListOptions())
 	if err != nil {
 		return nil, err
@@ -232,10 +226,7 @@ func (l *K8sLogic) ListConfigMapsWithOptions(ctx context.Context, opts K8sListOp
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if opts.Namespace != "" {
-		ns = opts.Namespace
-	}
+	ns := l.resolveNamespace(opts.Namespace)
 
 	cmList, err := cli.CoreV1().ConfigMaps(ns).List(ctx, opts.toListOptions())
 	if err != nil {
@@ -303,10 +294,7 @@ func (l *K8sLogic) ListSecretsWithOptions(ctx context.Context, opts K8sListOptio
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if opts.Namespace != "" {
-		ns = opts.Namespace
-	}
+	ns := l.resolveNamespace(opts.Namespace)
 
 	secList, err := cli.CoreV1().Secrets(ns).List(ctx, opts.toListOptions())
 	if err != nil {

@@ -38,10 +38,7 @@ func (l *K8sLogic) ListDeploymentsWithOptions(ctx context.Context, opts K8sListO
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if opts.Namespace != "" {
-		ns = opts.Namespace
-	}
+	ns := l.resolveNamespace(opts.Namespace)
 
 	depList, err := cli.AppsV1().Deployments(ns).List(ctx, opts.toListOptions())
 	if err != nil {
@@ -162,10 +159,7 @@ func (l *K8sLogic) ListStatefulSetsWithOptions(ctx context.Context, opts K8sList
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if opts.Namespace != "" {
-		ns = opts.Namespace
-	}
+	ns := l.resolveNamespace(opts.Namespace)
 
 	stsList, err := cli.AppsV1().StatefulSets(ns).List(ctx, opts.toListOptions())
 	if err != nil {
@@ -294,10 +288,7 @@ func (l *K8sLogic) ListDaemonSetsWithOptions(ctx context.Context, opts K8sListOp
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if opts.Namespace != "" {
-		ns = opts.Namespace
-	}
+	ns := l.resolveNamespace(opts.Namespace)
 
 	dsList, err := cli.AppsV1().DaemonSets(ns).List(ctx, opts.toListOptions())
 	if err != nil {

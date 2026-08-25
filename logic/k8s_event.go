@@ -25,10 +25,7 @@ func (l *K8sLogic) ListEvents(ctx context.Context, namespace, fieldSelector stri
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if namespace != "" {
-		ns = namespace
-	}
+	ns := l.resolveNamespace(namespace)
 
 	eventList, err := cli.CoreV1().Events(ns).List(ctx, metav1.ListOptions{
 		FieldSelector: fieldSelector,

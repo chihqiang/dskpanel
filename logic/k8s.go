@@ -57,6 +57,21 @@ func (l *K8sLogic) namespace() string {
 	return "default"
 }
 
+// resolveNamespace 解析请求中的命名空间参数（列表接口）。
+//   - ""         → 默认命名空间
+//   - "all"/"_all_"/"*" → ""（空串 = 列出所有命名空间的资源）
+//   - 其它        → 原样使用
+func (l *K8sLogic) resolveNamespace(ns string) string {
+	switch ns {
+	case "all", "_all_", "*":
+		return "" // clientset 空串 = 所有命名空间
+	case "":
+		return l.namespace()
+	default:
+		return ns
+	}
+}
+
 // restConfig 构建 rest.Config（复用于 clientset 和 SPDY executor）。
 func (l *K8sLogic) restConfig() (*rest.Config, error) {
 	// 1. 配置了 kubeconfig 内容 → 从内容加载。

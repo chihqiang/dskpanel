@@ -8,7 +8,7 @@ import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
 import { ScaleModal, ResourceDetailModal, ResourceToolbar, YamlCreateModal } from '@/components/k8s'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
-import { useNamespaces } from '@/composables/useNamespaces'
+import { useNamespaces, ALL_NS } from '@/composables/useNamespaces'
 import { k8sWorkloadTemplates } from '@/templates'
 import { workloadReadyVariant } from '@/utils/k8s'
 import {
@@ -178,9 +178,15 @@ const dsColumns: DataTableColumn[] = [
 ]
 
 const currentColumns = computed<DataTableColumn[]>(() => {
-  if (activeTab.value === 'deployment') return depColumns
-  if (activeTab.value === 'statefulset') return stsColumns
-  return dsColumns
+  let cols: DataTableColumn[]
+  if (activeTab.value === 'deployment') cols = [...depColumns]
+  else if (activeTab.value === 'statefulset') cols = [...stsColumns]
+  else cols = [...dsColumns]
+  // 所有命名空间模式下展示命名空间列。
+  if (namespace.value === ALL_NS) {
+    cols.splice(1, 0, { label: '命名空间', key: 'namespace', width: '140px' })
+  }
+  return cols
 })
 
 function buildActions(row: Record<string, unknown>): RowAction[] {

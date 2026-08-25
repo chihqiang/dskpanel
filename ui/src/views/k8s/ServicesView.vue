@@ -8,7 +8,7 @@ import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
 import { ResourceDetailModal, ResourceToolbar, YamlCreateModal } from '@/components/k8s'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
-import { useNamespaces } from '@/composables/useNamespaces'
+import { useNamespaces, ALL_NS } from '@/composables/useNamespaces'
 import { k8sServiceTemplates } from '@/templates'
 import { serviceTypeVariant } from '@/utils/k8s'
 import {
@@ -133,9 +133,14 @@ const ingColumns: DataTableColumn[] = [
   { label: '操作', key: 'actions', width: '120px', align: 'right' },
 ]
 
-const currentColumns = computed<DataTableColumn[]>(() =>
-  activeTab.value === 'service' ? svcColumns : ingColumns,
-)
+const currentColumns = computed<DataTableColumn[]>(() => {
+  const cols = [...(activeTab.value === 'service' ? svcColumns : ingColumns)]
+  // 所有命名空间模式下展示命名空间列。
+  if (namespace.value === ALL_NS) {
+    cols.splice(1, 0, { label: '命名空间', key: 'namespace', width: '140px' })
+  }
+  return cols
+})
 
 /** 端口列表格式化：如 "80:80/tcp"、"30080:80/tcp(NodePort)"。 */
 function fmtPorts(p: { port: number; target_port: string; protocol: string; node_port?: number }[]): string {

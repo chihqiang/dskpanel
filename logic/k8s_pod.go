@@ -52,10 +52,7 @@ func (l *K8sLogic) ListPodsWithOptions(ctx context.Context, opts K8sListOptions)
 	if err != nil {
 		return nil, err
 	}
-	ns := l.namespace()
-	if opts.Namespace != "" {
-		ns = opts.Namespace
-	}
+	ns := l.resolveNamespace(opts.Namespace)
 
 	podList, err := cli.CoreV1().Pods(ns).List(ctx, opts.toListOptions())
 	if err != nil {

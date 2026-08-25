@@ -8,7 +8,7 @@ import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
 import { PodDetailModal, PodLogsModal, ResourceToolbar, YamlCreateModal } from '@/components/k8s'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
-import { useNamespaces } from '@/composables/useNamespaces'
+import { useNamespaces, ALL_NS } from '@/composables/useNamespaces'
 import { k8sPodTemplates } from '@/templates'
 import { podPhaseVariant } from '@/utils/k8s'
 import { k8sPods, k8sDeletePod, type K8sPodItem } from '@/api/k8s'
@@ -92,16 +92,23 @@ function buildActions(row: K8sPodItem): RowAction[] {
   ]
 }
 
-const columns: DataTableColumn[] = [
-  { label: '名称', key: 'name' },
-  { label: '状态', key: 'status', width: '100px' },
-  { label: '就绪', key: 'ready', width: '80px', align: 'center' },
-  { label: '重启', key: 'restarts', width: '70px', align: 'center' },
-  { label: 'IP', key: 'ip', width: '130px' },
-  { label: '镜像', key: 'image' },
-  { label: '创建时间', key: 'created_at', width: '150px' },
-  { label: '操作', key: 'actions', width: '160px', align: 'right' },
-]
+const columns = computed<DataTableColumn[]>(() => {
+  const cols: DataTableColumn[] = [
+    { label: '名称', key: 'name' },
+    { label: '状态', key: 'status', width: '100px' },
+    { label: '就绪', key: 'ready', width: '80px', align: 'center' },
+    { label: '重启', key: 'restarts', width: '70px', align: 'center' },
+    { label: 'IP', key: 'ip', width: '130px' },
+    { label: '镜像', key: 'image' },
+    { label: '创建时间', key: 'created_at', width: '150px' },
+    { label: '操作', key: 'actions', width: '160px', align: 'right' },
+  ]
+  // 所有命名空间模式下展示命名空间列。
+  if (namespace.value === ALL_NS) {
+    cols.splice(1, 0, { label: '命名空间', key: 'namespace', width: '140px' })
+  }
+  return cols
+})
 </script>
 
 <template>
