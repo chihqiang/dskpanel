@@ -114,6 +114,10 @@ func (l *K8sLogic) applyYAML(ctx context.Context, content string, dryRun bool) (
 }
 
 // readChunk 从多文档解码器读取一个 YAML 文档。
+//
+// DocumentDecoder 每次 Read 返回一个完整文档（err=nil）；当文档大于内部
+// 缓冲（4096）时返回 io.ErrShortBuffer 表示需继续读取剩余部分。
+// 因此 err==nil 时应立即返回当前文档；ErrShortBuffer 时继续累积直到读完。
 func readChunk(r io.Reader, buf *[]byte) ([]byte, error) {
 	*buf = (*buf)[:0]
 	tmp := make([]byte, 4096)
@@ -128,12 +132,15 @@ func readChunk(r io.Reader, buf *[]byte) ([]byte, error) {
 			}
 			return *buf, nil
 		}
-		if err != nil && err != io.ErrShortBuffer {
+		if err == io.ErrShortBuffer {
+			// 文档尚未读完（超过 4096），继续读取剩余部分。
+			continue
+		}
+		if err != nil {
 			return nil, err
 		}
-		if err == io.ErrShortBuffer {
-			return *buf, nil
-		}
+		// err == nil：已读到完整的一个文档。
+		return *buf, nil
 	}
 }
 
