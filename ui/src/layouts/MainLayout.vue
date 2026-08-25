@@ -248,7 +248,7 @@ function logout(): void {
             <span class="h-2.5 w-2.5 rounded-full" :class="dockerEnabled ? 'bg-green-500' : 'bg-slate-300'" />
             Docker {{ dockerEnabled ? dockerInfo?.version : '未检测到' }}
           </span>
-          <!-- 活动通知 -->
+          <!-- 通知 -->
           <ActivityDrawer />
           <span class="hidden text-sm text-slate-600 dark:text-slate-300 sm:inline">{{ username }}</span>
           <button

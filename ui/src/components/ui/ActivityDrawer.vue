@@ -103,7 +103,7 @@ function evTime(sec: number): string {
   <!-- 铃铛按钮 -->
   <button
     class="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
-    :aria-label="`活动通知${totalUnread > 0 ? `，${totalUnread} 条未读` : ''}`"
+    :aria-label="`通知${totalUnread > 0 ? `，${totalUnread} 条未读` : ''}`"
     @click="toggle"
   >
     <Bell class="h-5 w-5" />
@@ -128,13 +128,13 @@ function evTime(sec: number): string {
           class="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl outline-none dark:bg-slate-800"
           role="dialog"
           aria-modal="true"
-          aria-label="活动通知"
+          aria-label="通知"
         >
           <!-- 头部 -->
           <div class="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
             <div class="flex items-center gap-2">
               <Bell class="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">活动通知</h3>
+              <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">通知</h3>
             </div>
             <button
               class="text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200"
