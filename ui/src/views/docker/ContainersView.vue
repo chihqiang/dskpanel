@@ -69,6 +69,19 @@ const filteredItems = computed(() => {
   )
 })
 
+// 分页。
+const page = ref(1)
+const pageSize = ref(20)
+const pagedItems = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filteredItems.value.slice(start, start + pageSize.value)
+})
+
+// 搜索或筛选变化时重置页码。
+watch([debouncedKeyword, stateFilter, () => items.value.length], () => {
+  page.value = 1
+})
+
 /** 同步 URL 中的 state 参数（概览页跳转、手动修改地址等）。 */
 watch(
   () => route.query.state,
@@ -357,12 +370,16 @@ function fmtPorts(item: ContainerItem): string {
     <DataTable
       title="容器列表"
       :columns="columns"
-      :data="filteredItems"
+      :data="pagedItems"
       :loading="loading"
       :error="errorMsg"
       row-key="id"
       selectable
       :selected-keys="selectedKeys"
+      pageable
+      v-model:page="page"
+      :page-size="pageSize"
+      :total="filteredItems.length"
       empty-text=""
       @update:selected-keys="selectedKeys = $event"
       @retry="load"

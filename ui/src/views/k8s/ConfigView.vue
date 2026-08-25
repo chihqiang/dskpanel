@@ -56,6 +56,9 @@ const currentItems = computed<unknown[]>(() => {
 const detailOpen = ref(false)
 const detailTitle = ref('')
 const detailFetch = ref<(() => Promise<string>) | null>(null)
+const detailKind = ref('')
+const detailName = ref('')
+const detailNamespace = ref('')
 
 async function load(): Promise<void> {
   loading.value = true
@@ -79,9 +82,12 @@ onMounted(async () => {
   await load()
 })
 
-function openYaml(title: string, path: string): void {
+function openYaml(title: string, path: string, kind = '', name = '', ns = ''): void {
   detailTitle.value = title
   detailFetch.value = () => k8sRawYaml(path)
+  detailKind.value = kind
+  detailName.value = name
+  detailNamespace.value = ns
   detailOpen.value = true
 }
 
@@ -103,12 +109,12 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
   const ns = row.namespace as string
   if (activeTab.value === 'configmap') {
     return [
-      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`ConfigMap/${name}`, `configmaps/${name}?namespace=${encodeURIComponent(ns)}`) },
+      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`ConfigMap/${name}`, `configmaps/${name}?namespace=${encodeURIComponent(ns)}`, 'ConfigMap', name, ns) },
       { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('ConfigMap', name, () => k8sDeleteConfigMap(name, ns)) },
     ]
   }
   return [
-    { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Secret/${name}`, `secrets/${name}?namespace=${encodeURIComponent(ns)}`) },
+    { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Secret/${name}`, `secrets/${name}?namespace=${encodeURIComponent(ns)}`, 'Secret', name, ns) },
     { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('Secret', name, () => k8sDeleteSecret(name, ns)) },
   ]
 }
@@ -185,6 +191,6 @@ const currentColumns = computed<DataTableColumn[]>(() => {
     <YamlCreateModal v-model:open="createOpen" title="创建 ConfigMap / Secret" :templates="k8sConfigTemplates" @created="load" />
 
     <!-- 详情（YAML，Secret 为脱敏 YAML） -->
-    <ResourceDetailModal v-model:open="detailOpen" :title="detailTitle" :fetch-yaml="detailFetch" />
+    <ResourceDetailModal v-model:open="detailOpen" :title="detailTitle" :fetch-yaml="detailFetch" :resource-kind="detailKind" :resource-name="detailName" :resource-namespace="detailNamespace" @saved="load" />
   </div>
 </template>

@@ -40,6 +40,9 @@ const sysInfo = ref<DockerSystemInfo | null>(null)
 // 磁盘占用历史趋势（metric 采集）。
 const diskTrend = ref<{ time: string; storage: number }[]>([])
 const diskTrendLoading = ref(false)
+// CPU / 内存历史趋势（metric 采集）。
+const cpuMemTrend = ref<{ time: string; cpu: number; memory: number }[]>([])
+const cpuMemTrendLoading = ref(false)
 const pruning = ref(false)
 
 /** 一键清理未使用资源。 */
@@ -56,6 +59,7 @@ function openPruneAll(): void {
         )
         await loadOverview()
         await loadDiskTrend()
+        await loadCpuMemTrend()
       } catch (err) {
         toast.error((err as Error).message)
       } finally {
@@ -65,6 +69,61 @@ function openPruneAll(): void {
     { danger: true },
   )
 }
+
+const cpuMemTrendOption = computed(() => ({
+  tooltip: {
+    trigger: 'axis',
+  },
+  legend: {
+    data: ['CPU (m核)', '内存 (MB)'],
+    textStyle: { fontSize: 11, color: '#94a3b8' },
+    top: 0,
+  },
+  grid: { left: 8, right: 8, top: 32, bottom: 8, containLabel: true },
+  xAxis: {
+    type: 'category',
+    data: cpuMemTrend.value.map((d) => d.time),
+    axisLine: { lineStyle: { color: '#e2e8f0' } },
+    axisLabel: { fontSize: 10, color: '#94a3b8' },
+  },
+  yAxis: [
+    {
+      type: 'value',
+      name: 'CPU (m核)',
+      nameTextStyle: { fontSize: 10, color: '#94a3b8' },
+      axisLabel: { fontSize: 10, color: '#94a3b8' },
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+    },
+    {
+      type: 'value',
+      name: '内存 (MB)',
+      nameTextStyle: { fontSize: 10, color: '#94a3b8' },
+      axisLabel: { fontSize: 10, color: '#94a3b8', formatter: (v: number) => `${(v / 1024).toFixed(0)}M` },
+      splitLine: { show: false },
+    },
+  ],
+  series: [
+    {
+      name: 'CPU (m核)',
+      type: 'line',
+      data: cpuMemTrend.value.map((d) => d.cpu),
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: 2, color: '#3b82f6' },
+      areaStyle: { opacity: 0.08 },
+    },
+    {
+      name: '内存 (MB)',
+      type: 'line',
+      yAxisIndex: 1,
+      data: cpuMemTrend.value.map((d) => d.memory),
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: 2, color: '#10b981' },
+      areaStyle: { opacity: 0.08 },
+    },
+  ],
+}))
 
 const diskTrendOption = computed(() => ({
   tooltip: {
@@ -111,11 +170,28 @@ async function loadDiskTrend(): Promise<void> {
   }
 }
 
+async function loadCpuMemTrend(): Promise<void> {
+  cpuMemTrendLoading.value = true
+  try {
+    const rows = await listNodeMetrics('docker', 120)
+    cpuMemTrend.value = rows.map((r) => ({
+      time: new Date(r.time).toLocaleTimeString('zh-CN', { hour12: false }),
+      cpu: Number(r.cpu) || 0,
+      memory: Number(r.memory) || 0,
+    }))
+  } catch {
+    cpuMemTrend.value = []
+  } finally {
+    cpuMemTrendLoading.value = false
+  }
+}
+
 onMounted(async () => {
   await detect()
   if (dockerInfo.value?.available) {
     loadOverview()
     loadDiskTrend()
+    loadCpuMemTrend()
   }
 })
 
@@ -370,6 +446,21 @@ const diskRows = computed<DiskUsageRow[]>(() => {
             </p>
           </div>
         </div>
+      </Card>
+
+      <!-- CPU / 内存趋势（metric 采集历史） -->
+      <Card v-if="cpuMemTrend.length > 0">
+        <div class="mb-3 flex items-center justify-between gap-x-4 gap-y-2">
+          <div class="flex items-center gap-2">
+            <Cpu class="h-4 w-4 text-slate-400" />
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-200">CPU / 内存趋势</span>
+            <span class="text-xs text-slate-400">（metric 每 {{ '60' }}s 采集，{{ cpuMemTrend.length }} 个点）</span>
+          </div>
+          <Button variant="ghost" size="sm" :loading="cpuMemTrendLoading" @click="loadCpuMemTrend">
+            <RefreshCw class="mr-1 h-3.5 w-3.5" />刷新
+          </Button>
+        </div>
+        <VChart class="w-full" style="height: 180px" :option="cpuMemTrendOption" autoresize />
       </Card>
 
       <!-- 磁盘占用趋势（metric 采集历史） -->

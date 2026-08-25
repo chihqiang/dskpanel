@@ -264,3 +264,14 @@ export async function exportContainer(
   a.remove()
   URL.revokeObjectURL(url)
 }
+
+/** 容器 exec 结果。 */
+export interface ContainerExecResult {
+  stdout: string
+  stderr?: string
+}
+
+/** 在容器中执行一次性命令（非交互式）。 */
+export function execContainer(id: string, command: string[]) {
+  return http.post<ContainerExecResult>(`/api/v1/containers/${id}/exec`, { command })
+}

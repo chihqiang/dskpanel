@@ -144,3 +144,19 @@ func (h *K8sHandler) ListNamespaces(w http.ResponseWriter, r *http.Request) {
 	}
 	writeK8sList(w, r, items)
 }
+
+// InspectNamespace 命名空间详情（支持 ?format=yaml）。
+func (h *K8sHandler) InspectNamespace(w http.ResponseWriter, r *http.Request) {
+	ns, err := h.ctx.K8sLogic.InspectNamespace(r.Context(), r.PathValue("name"))
+	if err != nil {
+		writeK8sError(w, err)
+		return
+	}
+	writeK8sObject(w, r, ns)
+}
+
+// DeleteNamespace 删除命名空间（NotFound 幂等）。
+func (h *K8sHandler) DeleteNamespace(w http.ResponseWriter, r *http.Request) {
+	err := h.ctx.K8sLogic.DeleteNamespace(r.Context(), r.PathValue("name"))
+	writeK8sDeleteResult(w, err)
+}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -973,4 +974,56 @@ func (l *ContainerLogic) ResizeContainerTTY(ctx context.Context, execID string, 
 		return err
 	}
 	return nil
+}
+
+// ContainerExecResult 一次性 exec 执行结果。
+type ContainerExecResult struct {
+	Stdout string `json:"stdout"`
+	Stderr string `json:"stderr,omitempty"`
+}
+
+// Exec 在容器中执行一次性命令（非交互式）。
+func (l *ContainerLogic) Exec(ctx context.Context, id string, cmd []string) (*ContainerExecResult, error) {
+	logger.InfoCtx(ctx, "container exec", logger.String("id", id), logger.String("cmd", fmt.Sprintf("%v", cmd)))
+	cli, err := l.newClient()
+	if err != nil {
+		return nil, err
+	}
+	defer cli.Close()
+
+	created, err := cli.ExecCreate(ctx, id, client.ExecCreateOptions{
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          cmd,
+	})
+	if err != nil {
+		logger.ErrorCtx(ctx, "container exec create failed", logger.String("id", id), logger.Err(err))
+		return nil, err
+	}
+
+	res, err := cli.ExecAttach(ctx, created.ID, client.ExecAttachOptions{})
+	if err != nil {
+		logger.ErrorCtx(ctx, "container exec attach failed", logger.String("id", id), logger.Err(err))
+		return nil, err
+	}
+	defer res.Close()
+
+	data, err := io.ReadAll(res.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	// Docker exec 输出混合了 stdout 和 stderr（multiplexed），
+	// 简化处理：将所有输出作为 stdout 返回。
+	result := &ContainerExecResult{
+		Stdout: string(data),
+	}
+
+	// 检查退出码。
+	inspect, err := cli.ExecInspect(ctx, created.ID, client.ExecInspectOptions{})
+	if err == nil && inspect.ExitCode != 0 {
+		result.Stderr = fmt.Sprintf("exit code: %d", inspect.ExitCode)
+	}
+
+	return result, nil
 }

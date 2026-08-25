@@ -5,49 +5,43 @@ import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
-import { ResourceDetailModal, ResourceToolbar, YamlCreateModal } from '@/components/k8s'
+import { ResourceDetailModal, ResourceToolbar } from '@/components/k8s'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { useNamespaces, ALL_NS } from '@/composables/useNamespaces'
-import { k8sServiceTemplates } from '@/templates'
-import { serviceTypeVariant } from '@/utils/k8s'
 import {
-  k8sServices,
-  k8sDeleteService,
-  k8sIngresses,
-  k8sDeleteIngress,
+  k8sPVCs,
+  k8sDeletePVC,
+  k8sStorageClasses,
   k8sRawYaml,
-  type K8sServiceItem,
-  type K8sIngressItem,
+  type K8sPVCItem,
+  type K8sStorageClassItem,
 } from '@/api/k8s'
 
-type Tab = 'service' | 'ingress'
+type Tab = 'pvc' | 'storageclass'
 
 const toast = useToast()
 const confirm = useConfirm()
 
 const { current: namespace, loadNamespaces } = useNamespaces()
 
-const activeTab = ref<Tab>('service')
+const activeTab = ref<Tab>('pvc')
 const tabs: { key: Tab; label: string }[] = [
-  { key: 'service', label: 'Service' },
-  { key: 'ingress', label: 'Ingress' },
+  { key: 'pvc', label: 'PVC' },
+  { key: 'storageclass', label: 'StorageClass' },
 ]
 const activeTabLabel = computed(() => tabs.find((t) => t.key === activeTab.value)?.label ?? '')
 
-const services = ref<K8sServiceItem[]>([])
-const ingresses = ref<K8sIngressItem[]>([])
+const pvcs = ref<K8sPVCItem[]>([])
+const storageClasses = ref<K8sStorageClassItem[]>([])
 const loading = ref(false)
 const errorMsg = ref('')
 
 // 名称搜索。
 const keyword = ref('')
 
-// YAML 创建弹窗。
-const createOpen = ref(false)
-
 const currentItems = computed<unknown[]>(() => {
-  const list = activeTab.value === 'service' ? services.value : ingresses.value
+  const list = activeTab.value === 'pvc' ? pvcs.value : storageClasses.value
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return list
   return list.filter((x) => (x as { name: string }).name.toLowerCase().includes(kw))
@@ -65,10 +59,11 @@ async function load(): Promise<void> {
   loading.value = true
   errorMsg.value = ''
   try {
-    const ns = namespace.value
-    const [svc, ing] = await Promise.all([k8sServices(ns), k8sIngresses(ns)])
-    services.value = svc
-    ingresses.value = ing
+    if (activeTab.value === 'pvc') {
+      pvcs.value = await k8sPVCs(namespace.value)
+    } else {
+      storageClasses.value = await k8sStorageClasses()
+    }
   } catch (err) {
     errorMsg.value = (err as Error).message
   } finally {
@@ -76,7 +71,11 @@ async function load(): Promise<void> {
   }
 }
 
-watch(namespace, () => void load())
+watch(namespace, () => {
+  if (activeTab.value === 'pvc') void load()
+})
+
+watch(activeTab, () => void load())
 
 onMounted(async () => {
   await loadNamespaces()
@@ -92,78 +91,70 @@ function openYaml(title: string, path: string, kind = '', name = '', ns = ''): v
   detailOpen.value = true
 }
 
-function remove(kind: string, name: string, fn: () => Promise<unknown>): void {
+function removePVC(name: string, ns: string): void {
   void confirm(
-    `删除 ${kind}`,
-    `确认删除 ${kind}「${name}」？此操作不可恢复。`,
+    '删除 PVC',
+    `确认删除 PVC「${name}」？此操作不可恢复。`,
     async () => {
-      await fn()
-      toast.success(`已删除 ${kind}「${name}」`)
+      await k8sDeletePVC(name, ns)
+      toast.success(`已删除 PVC「${name}」`)
       await load()
     },
     { danger: true },
   )
 }
 
-function buildActions(row: Record<string, unknown>): RowAction[] {
+function buildPVCActions(row: Record<string, unknown>): RowAction[] {
   const name = row.name as string
   const ns = row.namespace as string
-  if (activeTab.value === 'service') {
-    return [
-      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Service/${name}`, `services/${name}?namespace=${encodeURIComponent(ns)}`, 'Service', name, ns) },
-      { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('Service', name, () => k8sDeleteService(name, ns)) },
-    ]
-  }
   return [
-    { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Ingress/${name}`, `ingresses/${name}?namespace=${encodeURIComponent(ns)}`, 'Ingress', name, ns) },
-    { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('Ingress', name, () => k8sDeleteIngress(name, ns)) },
+    { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`PVC/${name}`, `pvcs/${name}?namespace=${encodeURIComponent(ns)}`, 'PersistentVolumeClaim', name, ns) },
+    { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => removePVC(name, ns) },
   ]
 }
 
-const svcColumns: DataTableColumn[] = [
+function buildSCActions(row: Record<string, unknown>): RowAction[] {
+  const name = row.name as string
+  return [
+    { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`StorageClass/${name}`, `storageclasses/${name}`, 'StorageClass', name, '') },
+  ]
+}
+
+const pvcColumns: DataTableColumn[] = [
   { label: '名称', key: 'name' },
-  { label: '类型', key: 'type', width: '120px' },
-  { label: 'ClusterIP', key: 'cluster_ip', width: '130px' },
-  { label: '外部 IP', key: 'external_ip', width: '130px' },
-  { label: '端口', key: 'ports' },
+  { label: '状态', key: 'status', width: '90px' },
+  { label: 'StorageClass', key: 'storage_class', width: '140px' },
+  { label: '容量', key: 'capacity', width: '100px' },
+  { label: '请求', key: 'requested', width: '100px' },
+  { label: '访问模式', key: 'access_modes', width: '100px' },
   { label: '创建时间', key: 'created_at', width: '150px' },
   { label: '操作', key: 'actions', width: '120px', align: 'right' },
 ]
 
-const ingColumns: DataTableColumn[] = [
+const scColumns: DataTableColumn[] = [
   { label: '名称', key: 'name' },
-  { label: '域名', key: 'hosts' },
-  { label: '地址', key: 'address', width: '150px' },
-  { label: 'Class', key: 'class_name', width: '100px' },
+  { label: 'Provisioner', key: 'provisioner', width: '200px' },
+  { label: '回收策略', key: 'reclaim_policy', width: '100px' },
+  { label: '绑定模式', key: 'binding_mode', width: '120px' },
+  { label: '默认', key: 'default', width: '70px', align: 'center' },
   { label: '创建时间', key: 'created_at', width: '150px' },
-  { label: '操作', key: 'actions', width: '120px', align: 'right' },
+  { label: '操作', key: 'actions', width: '100px', align: 'right' },
 ]
 
 const currentColumns = computed<DataTableColumn[]>(() => {
-  const cols = [...(activeTab.value === 'service' ? svcColumns : ingColumns)]
-  // 所有命名空间模式下展示命名空间列。
-  if (namespace.value === ALL_NS) {
+  const cols = [...(activeTab.value === 'pvc' ? pvcColumns : scColumns)]
+  // PVC 在所有命名空间模式下展示命名空间列。
+  if (activeTab.value === 'pvc' && namespace.value === ALL_NS) {
     cols.splice(1, 0, { label: '命名空间', key: 'namespace', width: '140px' })
   }
   return cols
 })
-
-/** 端口列表格式化：如 "80:80/tcp"、"30080:80/tcp(NodePort)"。 */
-function fmtPorts(p: { port: number; target_port: string; protocol: string; node_port?: number }[]): string {
-  return (p ?? [])
-    .map((x) => `${x.port}:${x.target_port}/${x.protocol}${x.node_port ? `(NodePort ${x.node_port})` : ''}`)
-    .join('，')
-}
-
-function fmtHosts(hosts: string[] | undefined): string {
-  return hosts?.length ? hosts.join('，') : '—'
-}
 </script>
 
 <template>
   <div class="space-y-4">
-    <!-- 通用工具栏：Tab + YAML 创建 + 命名空间 + 搜索 + 刷新 -->
-    <ResourceToolbar v-model:keyword="keyword" create-label="创建 Service" @create="createOpen = true">
+    <!-- 通用工具栏：Tab + 命名空间 + 搜索 + 刷新 -->
+    <ResourceToolbar v-model:keyword="keyword">
       <template #default>
         <div class="inline-flex rounded-lg bg-slate-100 p-1 dark:bg-slate-700/60">
           <button
@@ -185,7 +176,9 @@ function fmtHosts(hosts: string[] | undefined): string {
       </template>
     </ResourceToolbar>
 
+    <!-- PVC 列表 -->
     <DataTable
+      v-if="activeTab === 'pvc'"
       :title="`${activeTabLabel} 列表`"
       :columns="currentColumns"
       :data="currentItems"
@@ -195,24 +188,34 @@ function fmtHosts(hosts: string[] | undefined): string {
       :empty-text="keyword ? '无匹配的资源' : `当前命名空间下暂无 ${activeTabLabel}`"
       @retry="load"
     >
-      <template #cell-type="{ row }">
-        <Badge :variant="serviceTypeVariant((row as K8sServiceItem).type)">
-          {{ (row as K8sServiceItem).type }}
-        </Badge>
-      </template>
-      <template #cell-ports="{ row }">
-        <span class="text-xs text-slate-600 dark:text-slate-300">{{ fmtPorts((row as K8sServiceItem).ports ?? []) }}</span>
-      </template>
-      <template #cell-hosts="{ row }">
-        <span class="text-xs text-slate-600 dark:text-slate-300">{{ fmtHosts((row as K8sIngressItem).hosts) }}</span>
+      <template #cell-status="{ row }">
+        <Badge :variant="(row as K8sPVCItem).status === 'Bound' ? 'green' : 'yellow'">{{ (row as K8sPVCItem).status }}</Badge>
       </template>
       <template #cell-actions="{ row }">
-        <RowActions :actions="buildActions(row as Record<string, unknown>)" :visible="2" />
+        <RowActions :actions="buildPVCActions(row as Record<string, unknown>)" :visible="2" />
       </template>
     </DataTable>
 
-    <!-- YAML 创建 -->
-    <YamlCreateModal v-model:open="createOpen" title="创建 Service / Ingress" :templates="k8sServiceTemplates" @created="load" />
+    <!-- StorageClass 列表 -->
+    <DataTable
+      v-else
+      :title="`${activeTabLabel} 列表`"
+      :columns="currentColumns"
+      :data="currentItems"
+      :loading="loading"
+      :error="errorMsg"
+      row-key="name"
+      :empty-text="keyword ? '无匹配的资源' : '暂无 StorageClass'"
+      @retry="load"
+    >
+      <template #cell-default="{ row }">
+        <Badge v-if="(row as K8sStorageClassItem).default" variant="green">默认</Badge>
+        <span v-else class="text-slate-400">—</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <RowActions :actions="buildSCActions(row as Record<string, unknown>)" :visible="2" />
+      </template>
+    </DataTable>
 
     <!-- 详情（YAML） -->
     <ResourceDetailModal v-model:open="detailOpen" :title="detailTitle" :fetch-yaml="detailFetch" :resource-kind="detailKind" :resource-name="detailName" :resource-namespace="detailNamespace" @saved="load" />

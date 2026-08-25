@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Braces, Pencil, X, Check } from '@lucide/vue'
+import { Braces, Pencil, X, Check, Unplug } from '@lucide/vue'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Badge from '@/components/ui/Badge.vue'
 import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import {
   inspectContainer,
   inspectContainerRaw,
   updateContainer,
   renameContainer,
+  execContainer,
   type ContainerDetail,
 } from '@/api/container'
+import { disconnectContainerFromNetwork } from '@/api/network'
 import Skeleton from '@/components/ui/Skeleton.vue'
 
 const props = defineProps<{ open: boolean; containerId: string; containerName?: string }>()
@@ -25,6 +28,16 @@ const loading = ref(false)
 const errorMsg = ref('')
 const detail = ref<ContainerDetail | null>(null)
 const toast = useToast()
+const confirm = useConfirm()
+
+// 断开网络。
+const disconnectingNet = ref('')
+
+// exec 一次性命令。
+const execShown = ref(false)
+const execCommand = ref('')
+const execOutput = ref('')
+const execBusy = ref(false)
 
 // 完整 inspect 原始 JSON。
 const rawOpen = ref(false)
@@ -172,6 +185,35 @@ function fmtPorts(ports?: Record<string, { private_port: number; public_port?: n
     })
     .join(', ')
 }
+
+/** 执行一次性命令。 */
+async function runExec(): Promise<void> {
+  if (!props.containerId || !execCommand.value.trim()) return
+  execBusy.value = true
+  execOutput.value = ''
+  try {
+    const result = await execContainer(props.containerId, execCommand.value.trim().split(/\s+/))
+    execOutput.value = [result.stdout, result.stderr].filter(Boolean).join('\n') || '（无输出）'
+  } catch (err) {
+    execOutput.value = (err as Error).message
+  } finally {
+    execBusy.value = false
+  }
+}
+
+function openDisconnectNetwork(netName: string): void {
+  void confirm(
+    '断开网络',
+    `确认将容器从网络「${netName}」断开？`,
+    async () => {
+      disconnectingNet.value = netName
+      await disconnectContainerFromNetwork(netName, props.containerId, false)
+      toast.success(`已从网络「${netName}」断开`)
+      await load()
+    },
+    { danger: true, onSuccess: () => { disconnectingNet.value = '' } },
+  )
+}
 </script>
 
 <template>
@@ -269,14 +311,26 @@ function fmtPorts(ports?: Record<string, { private_port: number; public_port?: n
         <!-- 网络 -->
         <div v-if="detail.network_settings?.networks">
           <label class="mb-1 block text-xs text-slate-500">网络</label>
-          <div class="flex flex-wrap gap-2">
-            <span
+          <div class="space-y-1.5">
+            <div
               v-for="(v, name) in detail.network_settings.networks"
               :key="name"
-              class="rounded-md bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+              class="flex items-center gap-2"
             >
-              {{ name }}{{ v.ip_address ? ` (${v.ip_address})` : '' }}
-            </span>
+              <span class="rounded-md bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                {{ name }}{{ v.ip_address ? ` (${v.ip_address})` : '' }}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="!text-red-600"
+                :loading="disconnectingNet === name"
+                @click="openDisconnectNetwork(name as string)"
+              >
+                <Unplug class="h-3 w-3" />
+                断开
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -309,6 +363,29 @@ function fmtPorts(ports?: Record<string, { private_port: number; public_port?: n
           <label class="mb-1 block text-xs text-slate-500">标签 ({{ Object.keys(detail.config.labels).length }})</label>
           <div class="max-h-32 overflow-y-auto rounded-md bg-slate-100 px-3 py-2 font-mono text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200">
             <div v-for="(v, k) in detail.config.labels" :key="k">{{ k }}={{ v }}</div>
+          </div>
+        </div>
+
+        <!-- 执行命令 -->
+        <div v-if="detail.state === 'running'">
+          <button
+            class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+            @click="execShown = !execShown"
+          >
+            {{ execShown ? '收起命令执行' : '展开命令执行（exec）' }}
+          </button>
+          <div v-if="execShown" class="mt-2 space-y-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                v-model="execCommand"
+                type="text"
+                class="input input-sm flex-1"
+                placeholder="例如 ls -la / env（一次性执行，非交互）"
+                @keydown.enter="runExec"
+              />
+              <Button size="sm" :loading="execBusy" @click="runExec">执行</Button>
+            </div>
+            <pre class="max-h-64 overflow-auto rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-green-300">{{ execOutput || '—' }}</pre>
           </div>
         </div>
 

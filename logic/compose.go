@@ -462,6 +462,47 @@ func (c *composeLogCollector) Lines() []string {
 	return c.lines
 }
 
+// ProjectConfig 读取 Compose 项目的配置文件内容。
+// configFiles 为逗号分隔的多个文件路径，返回第一个可读文件的内容。
+func (l *ComposeLogic) ProjectConfig(ctx context.Context, name string) (string, error) {
+	svc, closeFn, err := newComposeService()
+	if err != nil {
+		logger.ErrorCtx(ctx, "compose service init failed", logger.Err(err))
+		return "", err
+	}
+	defer closeFn()
+
+	stacks, err := svc.List(ctx, api.ListOptions{All: true})
+	if err != nil {
+		logger.ErrorCtx(ctx, "compose list failed", logger.Err(err))
+		return "", err
+	}
+
+	for _, st := range stacks {
+		if st.Name != name {
+			continue
+		}
+		if st.ConfigFiles == "" {
+			return "", fmt.Errorf("project %s has no config file", name)
+		}
+		// ConfigFiles 可能是逗号分隔的多个路径，取第一个。
+		paths := strings.Split(st.ConfigFiles, ",")
+		for _, p := range paths {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			data, err := os.ReadFile(p)
+			if err != nil {
+				continue
+			}
+			return string(data), nil
+		}
+		return "", fmt.Errorf("config file not readable for project %s", name)
+	}
+	return "", fmt.Errorf("project %s not found", name)
+}
+
 // isContainerRunning 判断容器是否处于运行态。
 func isContainerRunning(s container.ContainerState) bool {
 	return s == container.StateRunning

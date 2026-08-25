@@ -100,6 +100,7 @@ func Register(server *httpx.Server, ctx *svc.AppContext) {
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/containers/{id}/stats", Handler: containerHandler.Stats})
 	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/containers/batch", Handler: containerHandler.Batch})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/containers/{id}/top", Handler: containerHandler.Top})
+	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/containers/{id}/exec", Handler: containerHandler.Exec})
 	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/containers/{id}", Handler: containerHandler.Remove})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/containers/{id}/logs", Handler: containerHandler.Logs})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/containers/{id}/logs/stream", Handler: containerHandler.LogsStream})
@@ -146,6 +147,7 @@ func Register(server *httpx.Server, ctx *svc.AppContext) {
 	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/compose/projects/{name}/restart", Handler: composeHandler.ProjectRestart})
 	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/compose/projects/{name}/down", Handler: composeHandler.ProjectDown})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/compose/projects/{name}/logs", Handler: composeHandler.ProjectLogs})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/compose/projects/{name}/config", Handler: composeHandler.ProjectConfig})
 
 	// 指标查询。
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/metrics/nodes", Handler: metricHandler.ListNodeMetrics})
@@ -207,12 +209,15 @@ func Register(server *httpx.Server, ctx *svc.AppContext) {
 	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/nodes/{name}/drain", Handler: k8sHandler.DrainNode})
 	// 命名空间。
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/namespaces", Handler: k8sHandler.ListNamespaces})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/namespaces/{name}", Handler: k8sHandler.InspectNamespace})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/namespaces/{name}", Handler: k8sHandler.DeleteNamespace})
 	// Pod。
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pods", Handler: k8sHandler.ListPods})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pods/{name}", Handler: k8sHandler.InspectPod})
 	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/pods/{name}", Handler: k8sHandler.DeletePod})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pods/{name}/logs", Handler: k8sHandler.PodLogs})
 	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/pods/{name}/exec", Handler: k8sHandler.ExecPod})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pods/{name}/terminal", Handler: k8sHandler.PodTerminal})
 	// Deployment。
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/deployments", Handler: k8sHandler.ListDeployments})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/deployments/{name}", Handler: k8sHandler.InspectDeployment})
@@ -230,6 +235,14 @@ func Register(server *httpx.Server, ctx *svc.AppContext) {
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/daemonsets/{name}", Handler: k8sHandler.InspectDaemonSet})
 	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/daemonsets/{name}", Handler: k8sHandler.DeleteDaemonSet})
 	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/daemonsets/{name}/restart", Handler: k8sHandler.RestartDaemonSet})
+	// Job。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/jobs", Handler: k8sHandler.ListJobs})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/jobs/{name}", Handler: k8sHandler.InspectJob})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/jobs/{name}", Handler: k8sHandler.DeleteJob})
+	// CronJob。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/cronjobs", Handler: k8sHandler.ListCronJobs})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/cronjobs/{name}", Handler: k8sHandler.InspectCronJob})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/cronjobs/{name}", Handler: k8sHandler.DeleteCronJob})
 	// Service。
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/services", Handler: k8sHandler.ListServices})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/services/{name}", Handler: k8sHandler.InspectService})
@@ -246,6 +259,33 @@ func Register(server *httpx.Server, ctx *svc.AppContext) {
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/secrets", Handler: k8sHandler.ListSecrets})
 	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/secrets/{name}", Handler: k8sHandler.InspectSecret})
 	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/secrets/{name}", Handler: k8sHandler.DeleteSecret})
+	// PVC。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pvcs", Handler: k8sHandler.ListPVCs})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/pvcs/{name}", Handler: k8sHandler.InspectPVC})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/pvcs/{name}", Handler: k8sHandler.DeletePVC})
+	// StorageClass。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/storageclasses", Handler: k8sHandler.ListStorageClasses})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/storageclasses/{name}", Handler: k8sHandler.InspectStorageClass})
+	// RBAC - Role。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/roles", Handler: k8sHandler.ListRoles})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/roles/{name}", Handler: k8sHandler.InspectRole})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/roles/{name}", Handler: k8sHandler.DeleteRole})
+	// RBAC - ClusterRole。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/clusterroles", Handler: k8sHandler.ListClusterRoles})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/clusterroles/{name}", Handler: k8sHandler.InspectClusterRole})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/clusterroles/{name}", Handler: k8sHandler.DeleteClusterRole})
+	// RBAC - RoleBinding。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/rolebindings", Handler: k8sHandler.ListRoleBindings})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/rolebindings/{name}", Handler: k8sHandler.InspectRoleBinding})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/rolebindings/{name}", Handler: k8sHandler.DeleteRoleBinding})
+	// RBAC - ClusterRoleBinding。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/clusterrolebindings", Handler: k8sHandler.ListClusterRoleBindings})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/clusterrolebindings/{name}", Handler: k8sHandler.InspectClusterRoleBinding})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/clusterrolebindings/{name}", Handler: k8sHandler.DeleteClusterRoleBinding})
+	// HPA（自动伸缩）。
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/hpas", Handler: k8sHandler.ListHPAs})
+	authed.AddRoute(httpx.Route{Method: http.MethodGet, Path: "/k8s/hpas/{name}", Handler: k8sHandler.InspectHPA})
+	authed.AddRoute(httpx.Route{Method: http.MethodDelete, Path: "/k8s/hpas/{name}", Handler: k8sHandler.DeleteHPA})
 	// YAML 透传（kubectl apply 语义，支持多文档 YAML）。
 	authed.AddRoute(httpx.Route{Method: http.MethodPost, Path: "/k8s/apply", Handler: k8sHandler.ApplyYAML})
 	// YAML 删除（kubectl delete -f 语义，支持多文档 YAML）。

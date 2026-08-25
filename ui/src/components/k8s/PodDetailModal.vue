@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { Terminal as TerminalIcon } from '@lucide/vue'
 import Modal from '@/components/ui/Modal.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
+import PodTerminalModal from './PodTerminalModal.vue'
+import ResourceEventsTab from './ResourceEventsTab.vue'
 import { podPhaseVariant, k8sContainerStateVariant } from '@/utils/k8s'
 import { k8sExecPod, type K8sPodItem } from '@/api/k8s'
+
+type DetailTab = 'info' | 'events'
+const detailTab = ref<DetailTab>('info')
 
 const props = defineProps<{
   open: boolean
@@ -20,6 +26,10 @@ const execOutput = ref('')
 const execBusy = ref(false)
 const execShown = ref(false)
 
+// 交互式终端。
+const terminalOpen = ref(false)
+const terminalContainer = ref('')
+
 watch(
   () => [props.open, props.pod] as const,
   ([open, pod]) => {
@@ -28,6 +38,7 @@ watch(
       execCommand.value = ''
       execOutput.value = ''
       execShown.value = false
+      detailTab.value = 'info'
     }
   },
   { immediate: true },
@@ -60,6 +71,21 @@ async function runExec(): Promise<void> {
 <template>
   <Modal :open="open" @update:open="emit('update:open', $event)" :title="`Pod - ${pod?.name ?? ''}`" width="max-w-3xl">
     <div v-if="pod" class="space-y-5">
+      <!-- Tab 切换 -->
+      <div class="inline-flex rounded-lg bg-slate-100 p-1 dark:bg-slate-700/60">
+        <button
+          v-for="t in [{ key: 'info', label: '详情' }, { key: 'events', label: '事件' }] as const"
+          :key="t.key"
+          class="rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors"
+          :class="detailTab === t.key ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-800 dark:text-blue-300' : 'text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100'"
+          @click="detailTab = t.key"
+        >
+          {{ t.label }}
+        </button>
+      </div>
+
+      <!-- 详情 Tab -->
+      <div v-show="detailTab === 'info'" class="space-y-5">
       <!-- 基本信息 -->
       <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <div class="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-700/40">
@@ -158,12 +184,41 @@ async function runExec(): Promise<void> {
           <pre class="max-h-64 overflow-auto rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-green-300">{{ execOutput || '—' }}</pre>
         </div>
       </div>
+      </div>
+
+      <!-- 事件 Tab -->
+      <div v-show="detailTab === 'events'">
+        <ResourceEventsTab
+          kind="Pod"
+          :name="pod.name"
+          :namespace="pod.namespace"
+          :active="detailTab === 'events'"
+        />
+      </div>
     </div>
 
     <template #footer>
+      <div class="flex items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="!pod || pod.status !== 'Running'"
+          @click="terminalContainer = execContainer || pod?.containers?.[0]?.name || ''; terminalOpen = true"
+        >
+          <TerminalIcon class="h-3.5 w-3.5" />
+          交互式终端
+        </Button>
+      </div>
       <div class="ml-auto">
         <Button variant="secondary" @click="emit('update:open', false)">关闭</Button>
       </div>
     </template>
   </Modal>
+
+  <!-- 交互式终端 -->
+  <PodTerminalModal
+    v-model:open="terminalOpen"
+    :pod="pod"
+    :container="terminalContainer"
+  />
 </template>

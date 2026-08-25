@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { Container, Workflow, Boxes, Orbit, Menu, X } from '@lucide/vue'
+import { Container, Workflow, Boxes, Orbit, Menu, X, Search } from '@lucide/vue'
 import { useDockerDetect } from '@/composables/useDocker'
 import { useSwarmDetect } from '@/composables/useSwarmDetect'
 import { useK8sDetect } from '@/composables/useK8sDetect'
 import { useAuthStore } from '@/stores/auth'
 import ActivityDrawer from '@/components/ui/ActivityDrawer.vue'
 import Tooltip from '@/components/ui/Tooltip.vue'
+import CommandPalette from '@/components/ui/CommandPalette.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,6 +118,10 @@ function onNavClick(item: NavItem): void {
 function logout(): void {
   auth.logout()
   router.push('/login')
+}
+
+function openCommandPalette(): void {
+  window.dispatchEvent(new CustomEvent('open-command-palette'))
 }
 </script>
 
@@ -239,6 +244,16 @@ function logout(): void {
           </div>
         </div>
         <div class="flex items-center gap-3 sm:gap-4">
+          <!-- 全局搜索 -->
+          <button
+            class="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600 dark:border-slate-600 dark:bg-slate-700/50 dark:hover:border-slate-500 dark:hover:text-slate-200"
+            aria-label="全局搜索"
+            @click="openCommandPalette"
+          >
+            <Search class="h-4 w-4" />
+            <span class="hidden sm:inline">搜索…</span>
+            <kbd class="hidden rounded border border-slate-200 px-1 py-0.5 text-xs dark:border-slate-600 sm:inline">⌘K</kbd>
+          </button>
           <!-- Docker 状态 -->
           <span
             v-if="dockerChecked"
@@ -265,6 +280,9 @@ function logout(): void {
         <RouterView />
       </main>
     </div>
+
+    <!-- 全局搜索命令面板 -->
+    <CommandPalette />
   </div>
 </template>
 

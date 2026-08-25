@@ -2,12 +2,15 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/chihqiang/infra-go/httpx"
+	"github.com/gorilla/websocket"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"chihqiang/dskpanel/logic"
@@ -182,6 +185,91 @@ func (h *K8sHandler) ExecPod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.OkJSON(w, result)
+}
+
+// PodTerminal Pod 交互式终端（WebSocket）。
+// GET /api/v1/k8s/pods/{name}/terminal?namespace=xxx&container=xxx
+// 升级为 WebSocket 后，将 exec 的 stdin/stdout 与 ws 双向桥接。
+func (h *K8sHandler) PodTerminal(w http.ResponseWriter, r *http.Request) {
+	namespace := r.URL.Query().Get("namespace")
+	container := r.URL.Query().Get("container")
+	podName := r.PathValue("name")
+	if podName == "" {
+		http.Error(w, "missing pod name", http.StatusBadRequest)
+		return
+	}
+
+	ws, err := terminalUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer ws.Close()
+
+	stream, err := h.ctx.K8sLogic.ExecPodInteractive(r.Context(), logic.PodExecOptions{
+		Namespace: namespace,
+		Name:      podName,
+		Container: container,
+		Command:   []string{"/bin/sh"},
+		TTY:       true,
+	})
+	if err != nil {
+		_ = ws.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "exec failed: "+err.Error()))
+		return
+	}
+	defer stream.Close()
+
+	var wg sync.WaitGroup
+
+	// 容器输出 → WebSocket（二进制帧）。
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		buf := make([]byte, 4096)
+		for {
+			n, err := stream.Read(buf)
+			if n > 0 {
+				if werr := ws.WriteMessage(websocket.BinaryMessage, buf[:n]); werr != nil {
+					return
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// WebSocket → 容器 stdin（JSON 消息）。
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			_, data, err := ws.ReadMessage()
+			if err != nil {
+				return
+			}
+			var msg terminalMessage
+			if err := json.Unmarshal(data, &msg); err != nil {
+				continue
+			}
+			switch msg.Type {
+			case "input":
+				if msg.Data != "" {
+					_, _ = stream.Write([]byte(msg.Data))
+				}
+			case "resize":
+				if msg.Cols > 0 && msg.Rows > 0 {
+					_ = stream.Resize(uint16(msg.Cols), uint16(msg.Rows))
+				}
+			}
+		}
+	}()
+
+	wg.Wait()
+	_ = stream.Close()
+
+	_ = ws.WriteMessage(websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "pod exec exited"))
 }
 
 // parseDuration 解析时间字符串，支持 "5m"、"1h"、"3600"（纯数字视为秒）。

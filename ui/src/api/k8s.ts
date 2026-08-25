@@ -180,6 +180,32 @@ export interface K8sDaemonSetItem {
   labels?: Record<string, string>
 }
 
+/** Job 列表项。 */
+export interface K8sJobItem {
+  name: string
+  namespace: string
+  completions: string
+  duration: string
+  status: string
+  parallelism: number
+  image: string
+  created_at: string
+  labels?: Record<string, string>
+}
+
+/** CronJob 列表项。 */
+export interface K8sCronJobItem {
+  name: string
+  namespace: string
+  schedule: string
+  suspend: boolean
+  active: number
+  last_schedule: string
+  image: string
+  created_at: string
+  labels?: Record<string, string>
+}
+
 // ──────────────────────────────────────────────
 // Service / Ingress
 // ──────────────────────────────────────────────
@@ -264,6 +290,33 @@ export interface K8sEventItem {
 }
 
 // ──────────────────────────────────────────────
+// PVC / StorageClass
+// ──────────────────────────────────────────────
+export interface K8sPVCItem {
+  name: string
+  namespace: string
+  status: string
+  volume_name: string
+  storage_class: string
+  access_modes: string
+  capacity: string
+  requested: string
+  created_at: string
+  labels?: Record<string, string>
+}
+
+/** StorageClass 列表项。 */
+export interface K8sStorageClassItem {
+  name: string
+  provisioner: string
+  reclaim_policy: string
+  binding_mode: string
+  default: boolean
+  volume_binding: string
+  created_at: string
+}
+
+// ──────────────────────────────────────────────
 // YAML 透传
 // ──────────────────────────────────────────────
 
@@ -307,6 +360,16 @@ export function k8sOverview() {
 /** 命名空间列表。 */
 export function k8sNamespaces() {
   return http.get<K8sNamespaceItem[]>('/api/v1/k8s/namespaces')
+}
+
+/** 命名空间详情（原始对象，可 ?format=yaml）。 */
+export function k8sNamespaceInspect(name: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/namespaces/${name}?format=${format}`)
+}
+
+/** 删除命名空间（NotFound 幂等）。 */
+export function k8sDeleteNamespace(name: string) {
+  return http.delete<string>(`/api/v1/k8s/namespaces/${name}`)
 }
 
 /** 节点列表。 */
@@ -535,6 +598,12 @@ export function k8sEvents(namespace?: string, fieldSelector = '') {
   return http.get<K8sEventItem[]>(`/api/v1/k8s/events${qs ? `?${qs}` : ''}`)
 }
 
+/** 查询特定资源的事件（如 Pod / Deployment / Node）。 */
+export function k8sResourceEvents(kind: string, name: string, namespace: string) {
+  const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
+  return http.get<K8sEventItem[]>(`/api/v1/k8s/events/${encodeURIComponent(kind)}/${encodeURIComponent(name)}${qs}`)
+}
+
 /** YAML 透传：apply（kubectl apply 语义，支持多文档）。 */
 export function k8sApplyYAML(content: string) {
   return http.post<K8sApplyResult>('/api/v1/k8s/apply', { content })
@@ -570,4 +639,184 @@ export async function k8sRawYaml(path: string): Promise<string> {
     throw new ApiError(resp.status, text || `http ${resp.status}`)
   }
   return resp.text()
+}
+
+/** PVC 列表。 */
+export function k8sPVCs(namespace?: string) {
+  const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
+  return http.get<K8sPVCItem[]>(`/api/v1/k8s/pvcs${qs}`)
+}
+
+/** PVC 详情（原始对象，可 ?format=yaml）。 */
+export function k8sPVCInspect(name: string, namespace: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/pvcs/${name}?namespace=${encodeURIComponent(namespace)}&format=${format}`)
+}
+
+/** 删除 PVC（NotFound 幂等）。 */
+export function k8sDeletePVC(name: string, namespace: string) {
+  return http.delete<string>(`/api/v1/k8s/pvcs/${name}?namespace=${encodeURIComponent(namespace)}`)
+}
+
+/** StorageClass 列表。 */
+export function k8sStorageClasses() {
+  return http.get<K8sStorageClassItem[]>('/api/v1/k8s/storageclasses')
+}
+
+/** StorageClass 详情（原始对象，可 ?format=yaml）。 */
+export function k8sStorageClassInspect(name: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/storageclasses/${name}?format=${format}`)
+}
+
+/** Job 列表。 */
+export function k8sJobs(namespace?: string) {
+  const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
+  return http.get<K8sJobItem[]>(`/api/v1/k8s/jobs${qs}`)
+}
+
+/** Job 详情（原始对象，可 ?format=yaml）。 */
+export function k8sJobInspect(name: string, namespace: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/jobs/${name}?namespace=${encodeURIComponent(namespace)}&format=${format}`)
+}
+
+/** 删除 Job（NotFound 幂等）。 */
+export function k8sDeleteJob(name: string, namespace: string) {
+  return http.delete<string>(`/api/v1/k8s/jobs/${name}?namespace=${encodeURIComponent(namespace)}`)
+}
+
+/** CronJob 列表。 */
+export function k8sCronJobs(namespace?: string) {
+  const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
+  return http.get<K8sCronJobItem[]>(`/api/v1/k8s/cronjobs${qs}`)
+}
+
+/** CronJob 详情（原始对象，可 ?format=yaml）。 */
+export function k8sCronJobInspect(name: string, namespace: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/cronjobs/${name}?namespace=${encodeURIComponent(namespace)}&format=${format}`)
+}
+
+/** 删除 CronJob（NotFound 幂等）。 */
+export function k8sDeleteCronJob(name: string, namespace: string) {
+  return http.delete<string>(`/api/v1/k8s/cronjobs/${name}?namespace=${encodeURIComponent(namespace)}`)
+}
+
+// ──────────────────────────────────────────────
+// RBAC - Role / ClusterRole / RoleBinding / ClusterRoleBinding
+// ──────────────────────────────────────────────
+
+/** Role / ClusterRole 列表项。 */
+export interface K8sRoleItem {
+  name: string
+  namespace?: string
+  kind: string // Role / ClusterRole
+  rules: number
+  created_at: string
+  labels?: Record<string, string>
+}
+
+/** RoleBinding / ClusterRoleBinding 列表项。 */
+export interface K8sRoleBindingItem {
+  name: string
+  namespace?: string
+  kind: string // RoleBinding / ClusterRoleBinding
+  role_kind: string // Role / ClusterRole
+  role_name: string
+  subjects: number
+  created_at: string
+  labels?: Record<string, string>
+}
+
+/** Role 列表。 */
+export function k8sRoles(namespace?: string) {
+  const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
+  return http.get<K8sRoleItem[]>(`/api/v1/k8s/roles${qs}`)
+}
+
+/** Role 详情（原始对象，可 ?format=yaml）。 */
+export function k8sRoleInspect(name: string, namespace: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/roles/${name}?namespace=${encodeURIComponent(namespace)}&format=${format}`)
+}
+
+/** 删除 Role（NotFound 幂等）。 */
+export function k8sDeleteRole(name: string, namespace: string) {
+  return http.delete<string>(`/api/v1/k8s/roles/${name}?namespace=${encodeURIComponent(namespace)}`)
+}
+
+/** ClusterRole 列表。 */
+export function k8sClusterRoles() {
+  return http.get<K8sRoleItem[]>('/api/v1/k8s/clusterroles')
+}
+
+/** ClusterRole 详情（原始对象，可 ?format=yaml）。 */
+export function k8sClusterRoleInspect(name: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/clusterroles/${name}?format=${format}`)
+}
+
+/** 删除 ClusterRole（NotFound 幂等）。 */
+export function k8sDeleteClusterRole(name: string) {
+  return http.delete<string>(`/api/v1/k8s/clusterroles/${name}`)
+}
+
+/** RoleBinding 列表。 */
+export function k8sRoleBindings(namespace?: string) {
+  const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
+  return http.get<K8sRoleBindingItem[]>(`/api/v1/k8s/rolebindings${qs}`)
+}
+
+/** RoleBinding 详情（原始对象，可 ?format=yaml）。 */
+export function k8sRoleBindingInspect(name: string, namespace: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/rolebindings/${name}?namespace=${encodeURIComponent(namespace)}&format=${format}`)
+}
+
+/** 删除 RoleBinding（NotFound 幂等）。 */
+export function k8sDeleteRoleBinding(name: string, namespace: string) {
+  return http.delete<string>(`/api/v1/k8s/rolebindings/${name}?namespace=${encodeURIComponent(namespace)}`)
+}
+
+/** ClusterRoleBinding 列表。 */
+export function k8sClusterRoleBindings() {
+  return http.get<K8sRoleBindingItem[]>('/api/v1/k8s/clusterrolebindings')
+}
+
+/** ClusterRoleBinding 详情（原始对象，可 ?format=yaml）。 */
+export function k8sClusterRoleBindingInspect(name: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/clusterrolebindings/${name}?format=${format}`)
+}
+
+/** 删除 ClusterRoleBinding（NotFound 幂等）。 */
+export function k8sDeleteClusterRoleBinding(name: string) {
+  return http.delete<string>(`/api/v1/k8s/clusterrolebindings/${name}`)
+}
+
+// ──────────────────────────────────────────────
+// HPA (HorizontalPodAutoscaler)
+// ──────────────────────────────────────────────
+
+/** HPA 列表项。 */
+export interface K8sHPAItem {
+  name: string
+  namespace: string
+  target_ref: string
+  min_replicas: number
+  max_replicas: number
+  current_replicas: number
+  desired_replicas: number
+  metrics: string
+  created_at: string
+  labels?: Record<string, string>
+}
+
+/** HPA 列表。 */
+export function k8sHPAs(namespace?: string) {
+  const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
+  return http.get<K8sHPAItem[]>(`/api/v1/k8s/hpas${qs}`)
+}
+
+/** HPA 详情（原始对象，可 ?format=yaml）。 */
+export function k8sHPAInspect(name: string, namespace: string, format: 'json' | 'yaml' = 'json') {
+  return http.get<unknown>(`/api/v1/k8s/hpas/${name}?namespace=${encodeURIComponent(namespace)}&format=${format}`)
+}
+
+/** 删除 HPA（NotFound 幂等）。 */
+export function k8sDeleteHPA(name: string, namespace: string) {
+  return http.delete<string>(`/api/v1/k8s/hpas/${name}?namespace=${encodeURIComponent(namespace)}`)
 }

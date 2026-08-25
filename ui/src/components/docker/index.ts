@@ -17,6 +17,7 @@ import VolumeDetailModal from './VolumeDetailModal.vue'
 import ComposeDeployModal from './ComposeDeployModal.vue'
 import ComposeProjectDetailModal from './ComposeProjectDetailModal.vue'
 import ComposeProjectLogsModal from './ComposeProjectLogsModal.vue'
+import ComposeConfigModal from './ComposeConfigModal.vue'
 
 export {
   CreateContainerModal,
@@ -38,4 +39,5 @@ export {
   ComposeDeployModal,
   ComposeProjectDetailModal,
   ComposeProjectLogsModal,
+  ComposeConfigModal,
 }

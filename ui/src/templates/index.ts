@@ -10,4 +10,7 @@ export {
   k8sServiceTemplates,
   k8sConfigTemplates,
   k8sNodeTemplates,
+  k8sNamespaceTemplates,
+  k8sRbacTemplates,
+  k8sHpaTemplates,
 } from './k8s'

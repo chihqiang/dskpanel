@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Server, Boxes, User, Users, Layers, CircleDot, ListChecks, RefreshCw, Activity, Network, FileCode2, Rocket, BookOpen } from '@lucide/vue'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import VChart from 'vue-echarts'
+import { Server, Boxes, User, Users, Layers, CircleDot, ListChecks, RefreshCw, Activity, Network, FileCode2, Rocket, BookOpen, Cpu } from '@lucide/vue'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import { k8sOverview, type K8sOverview } from '@/api/k8s'
+import { listNodeMetrics } from '@/api/docker'
 import { nodeReadyVariant } from '@/utils/k8s'
+
+use([CanvasRenderer, LineChart, GridComponent, LegendComponent, TooltipComponent])
 
 const router = useRouter()
 
@@ -27,7 +35,83 @@ async function load(): Promise<void> {
     loading.value = false
   }
 }
-onMounted(load)
+onMounted(async () => {
+  await load()
+  if (available.value) loadCpuMemTrend()
+})
+
+// CPU / 内存趋势。
+const cpuMemTrend = ref<{ time: string; cpu: number; memory: number }[]>([])
+const cpuMemTrendLoading = ref(false)
+
+async function loadCpuMemTrend(): Promise<void> {
+  cpuMemTrendLoading.value = true
+  try {
+    const rows = await listNodeMetrics('k8s', 120)
+    cpuMemTrend.value = rows.map((r) => ({
+      time: new Date(r.time).toLocaleTimeString('zh-CN', { hour12: false }),
+      cpu: Number(r.cpu) || 0,
+      memory: Number(r.memory) || 0,
+    }))
+  } catch {
+    cpuMemTrend.value = []
+  } finally {
+    cpuMemTrendLoading.value = false
+  }
+}
+
+const cpuMemTrendOption = computed(() => ({
+  tooltip: { trigger: 'axis' },
+  legend: {
+    data: ['CPU (m核)', '内存 (MB)'],
+    textStyle: { fontSize: 11, color: '#94a3b8' },
+    top: 0,
+  },
+  grid: { left: 8, right: 8, top: 32, bottom: 8, containLabel: true },
+  xAxis: {
+    type: 'category',
+    data: cpuMemTrend.value.map((d) => d.time),
+    axisLine: { lineStyle: { color: '#e2e8f0' } },
+    axisLabel: { fontSize: 10, color: '#94a3b8' },
+  },
+  yAxis: [
+    {
+      type: 'value',
+      name: 'CPU (m核)',
+      nameTextStyle: { fontSize: 10, color: '#94a3b8' },
+      axisLabel: { fontSize: 10, color: '#94a3b8' },
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+    },
+    {
+      type: 'value',
+      name: '内存 (MB)',
+      nameTextStyle: { fontSize: 10, color: '#94a3b8' },
+      axisLabel: { fontSize: 10, color: '#94a3b8', formatter: (v: number) => `${(v / 1024).toFixed(0)}M` },
+      splitLine: { show: false },
+    },
+  ],
+  series: [
+    {
+      name: 'CPU (m核)',
+      type: 'line',
+      data: cpuMemTrend.value.map((d) => d.cpu),
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: 2, color: '#3b82f6' },
+      areaStyle: { opacity: 0.08 },
+    },
+    {
+      name: '内存 (MB)',
+      type: 'line',
+      yAxisIndex: 1,
+      data: cpuMemTrend.value.map((d) => d.memory),
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: 2, color: '#10b981' },
+      areaStyle: { opacity: 0.08 },
+    },
+  ],
+}))
 
 const summary = computed(() => data.value?.summary)
 
@@ -126,6 +210,21 @@ const nodeColumns: DataTableColumn[] = [
           </div>
         </div>
       </div>
+
+      <!-- CPU / 内存趋势 -->
+      <Card v-if="cpuMemTrend.length > 0">
+        <div class="mb-3 flex items-center justify-between gap-x-4 gap-y-2">
+          <div class="flex items-center gap-2">
+            <Cpu class="h-4 w-4 text-slate-400" />
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-200">CPU / 内存趋势</span>
+            <span class="text-xs text-slate-400">（metric 采集，{{ cpuMemTrend.length }} 个点）</span>
+          </div>
+          <Button variant="ghost" size="sm" :loading="cpuMemTrendLoading" @click="loadCpuMemTrend">
+            <RefreshCw class="mr-1 h-3.5 w-3.5" />刷新
+          </Button>
+        </div>
+        <VChart class="w-full" style="height: 180px" :option="cpuMemTrendOption" autoresize />
+      </Card>
 
       <!-- 阶段分布 + 资源概览 -->
       <div class="grid gap-4 lg:grid-cols-3">

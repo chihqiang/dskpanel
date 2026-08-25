@@ -105,3 +105,8 @@ export function composeProjectDown(name: string, volumes = false) {
 export function composeProjectLogs(name: string, tail = 200) {
   return http.get<string[]>(`/api/v1/compose/projects/${encodeURIComponent(name)}/logs?tail=${tail}`)
 }
+
+/** 读取 Compose 项目配置文件内容。 */
+export function composeProjectConfig(name: string) {
+  return http.get<string>(`/api/v1/compose/projects/${encodeURIComponent(name)}/config`)
+}

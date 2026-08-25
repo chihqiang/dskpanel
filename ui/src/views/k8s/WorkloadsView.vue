@@ -21,13 +21,19 @@ import {
   k8sDaemonSets,
   k8sDeleteDaemonSet,
   k8sRestartDaemonSet,
+  k8sJobs,
+  k8sDeleteJob,
+  k8sCronJobs,
+  k8sDeleteCronJob,
   k8sRawYaml,
   type K8sDeploymentItem,
   type K8sStatefulSetItem,
   type K8sDaemonSetItem,
+  type K8sJobItem,
+  type K8sCronJobItem,
 } from '@/api/k8s'
 
-type Tab = 'deployment' | 'statefulset' | 'daemonset'
+type Tab = 'deployment' | 'statefulset' | 'daemonset' | 'job' | 'cronjob'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -39,6 +45,8 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'deployment', label: 'Deployment' },
   { key: 'statefulset', label: 'StatefulSet' },
   { key: 'daemonset', label: 'DaemonSet' },
+  { key: 'job', label: 'Job' },
+  { key: 'cronjob', label: 'CronJob' },
 ]
 
 /** 当前 Tab 的显示名（用于表格标题）。 */
@@ -54,6 +62,8 @@ const createOpen = ref(false)
 const deployments = ref<K8sDeploymentItem[]>([])
 const statefulSets = ref<K8sStatefulSetItem[]>([])
 const daemonSets = ref<K8sDaemonSetItem[]>([])
+const jobs = ref<K8sJobItem[]>([])
+const cronJobs = ref<K8sCronJobItem[]>([])
 const loading = ref(false)
 const errorMsg = ref('')
 
@@ -62,7 +72,9 @@ const currentItems = computed<unknown[]>(() => {
   let list: unknown[]
   if (activeTab.value === 'deployment') list = deployments.value
   else if (activeTab.value === 'statefulset') list = statefulSets.value
-  else list = daemonSets.value
+  else if (activeTab.value === 'daemonset') list = daemonSets.value
+  else if (activeTab.value === 'job') list = jobs.value
+  else list = cronJobs.value
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return list
   return list.filter((x) => (x as { name: string }).name.toLowerCase().includes(kw))
@@ -76,20 +88,27 @@ const scaleTarget = ref<{ kind: 'deployment' | 'statefulset'; name: string; name
 const detailOpen = ref(false)
 const detailTitle = ref('')
 const detailFetch = ref<(() => Promise<string>) | null>(null)
+const detailKind = ref('')
+const detailName = ref('')
+const detailNamespace = ref('')
 
 async function load(): Promise<void> {
   loading.value = true
   errorMsg.value = ''
   try {
     const ns = namespace.value
-    const [deps, sts, ds] = await Promise.all([
+    const [deps, sts, ds, jb, cjb] = await Promise.all([
       k8sDeployments(ns),
       k8sStatefulSets(ns),
       k8sDaemonSets(ns),
+      k8sJobs(ns),
+      k8sCronJobs(ns),
     ])
     deployments.value = deps
     statefulSets.value = sts
     daemonSets.value = ds
+    jobs.value = jb
+    cronJobs.value = cjb
   } catch (err) {
     errorMsg.value = (err as Error).message
   } finally {
@@ -113,9 +132,12 @@ function openScale(kind: 'deployment' | 'statefulset', name: string, ns: string,
   scaleOpen.value = true
 }
 
-function openYaml(title: string, path: string): void {
+function openYaml(title: string, path: string, kind = '', name = '', ns = ''): void {
   detailTitle.value = title
   detailFetch.value = () => k8sRawYaml(path)
+  detailKind.value = kind
+  detailName.value = name
+  detailNamespace.value = ns
   detailOpen.value = true
 }
 
@@ -177,11 +199,34 @@ const dsColumns: DataTableColumn[] = [
   { label: '操作', key: 'actions', width: '200px', align: 'right' },
 ]
 
+const jobColumns: DataTableColumn[] = [
+  { label: '名称', key: 'name' },
+  { label: '状态', key: 'status', width: '90px' },
+  { label: '完成', key: 'completions', width: '80px', align: 'center' },
+  { label: '时长', key: 'duration', width: '100px' },
+  { label: '镜像', key: 'image' },
+  { label: '创建时间', key: 'created_at', width: '150px' },
+  { label: '操作', key: 'actions', width: '120px', align: 'right' },
+]
+
+const cronJobColumns: DataTableColumn[] = [
+  { label: '名称', key: 'name' },
+  { label: '调度', key: 'schedule', width: '140px' },
+  { label: '挂起', key: 'suspend', width: '70px', align: 'center' },
+  { label: '活跃', key: 'active', width: '70px', align: 'center' },
+  { label: '上次调度', key: 'last_schedule', width: '150px' },
+  { label: '镜像', key: 'image' },
+  { label: '创建时间', key: 'created_at', width: '150px' },
+  { label: '操作', key: 'actions', width: '120px', align: 'right' },
+]
+
 const currentColumns = computed<DataTableColumn[]>(() => {
   let cols: DataTableColumn[]
   if (activeTab.value === 'deployment') cols = [...depColumns]
   else if (activeTab.value === 'statefulset') cols = [...stsColumns]
-  else cols = [...dsColumns]
+  else if (activeTab.value === 'daemonset') cols = [...dsColumns]
+  else if (activeTab.value === 'job') cols = [...jobColumns]
+  else cols = [...cronJobColumns]
   // 所有命名空间模式下展示命名空间列。
   if (namespace.value === ALL_NS) {
     cols.splice(1, 0, { label: '命名空间', key: 'namespace', width: '140px' })
@@ -195,7 +240,7 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
   if (activeTab.value === 'deployment') {
     const d = row as unknown as K8sDeploymentItem
     return [
-      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Deployment/${name}`, `deployments/${name}?namespace=${encodeURIComponent(ns)}`) },
+      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Deployment/${name}`, `deployments/${name}?namespace=${encodeURIComponent(ns)}`, 'Deployment', name, ns) },
       { key: 'scale', label: '伸缩', icon: SlidersHorizontal, onClick: () => openScale('deployment', name, ns, d.desired) },
       { key: 'restart', label: '重启', icon: RotateCw, onClick: () => restart('Deployment', name, () => k8sRestartDeployment(name, ns)) },
       { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('Deployment', name, () => k8sDeleteDeployment(name, ns)) },
@@ -204,16 +249,28 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
   if (activeTab.value === 'statefulset') {
     const s = row as unknown as K8sStatefulSetItem
     return [
-      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`StatefulSet/${name}`, `statefulsets/${name}?namespace=${encodeURIComponent(ns)}`) },
+      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`StatefulSet/${name}`, `statefulsets/${name}?namespace=${encodeURIComponent(ns)}`, 'StatefulSet', name, ns) },
       { key: 'scale', label: '伸缩', icon: SlidersHorizontal, onClick: () => openScale('statefulset', name, ns, s.replicas) },
       { key: 'restart', label: '重启', icon: RotateCw, onClick: () => restart('StatefulSet', name, () => k8sRestartStatefulSet(name, ns)) },
       { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('StatefulSet', name, () => k8sDeleteStatefulSet(name, ns)) },
     ]
   }
+  if (activeTab.value === 'daemonset') {
+    return [
+      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`DaemonSet/${name}`, `daemonsets/${name}?namespace=${encodeURIComponent(ns)}`, 'DaemonSet', name, ns) },
+      { key: 'restart', label: '重启', icon: RotateCw, onClick: () => restart('DaemonSet', name, () => k8sRestartDaemonSet(name, ns)) },
+      { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('DaemonSet', name, () => k8sDeleteDaemonSet(name, ns)) },
+    ]
+  }
+  if (activeTab.value === 'job') {
+    return [
+      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Job/${name}`, `jobs/${name}?namespace=${encodeURIComponent(ns)}`, 'Job', name, ns) },
+      { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('Job', name, () => k8sDeleteJob(name, ns)) },
+    ]
+  }
   return [
-    { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`DaemonSet/${name}`, `daemonsets/${name}?namespace=${encodeURIComponent(ns)}`) },
-    { key: 'restart', label: '重启', icon: RotateCw, onClick: () => restart('DaemonSet', name, () => k8sRestartDaemonSet(name, ns)) },
-    { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('DaemonSet', name, () => k8sDeleteDaemonSet(name, ns)) },
+    { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`CronJob/${name}`, `cronjobs/${name}?namespace=${encodeURIComponent(ns)}`, 'CronJob', name, ns) },
+    { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('CronJob', name, () => k8sDeleteCronJob(name, ns)) },
   ]
 }
 </script>
@@ -265,6 +322,16 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
           </Badge>
         </template>
       </template>
+      <template #cell-status="{ row }">
+        <Badge :variant="(row as K8sJobItem).status === 'Complete' ? 'green' : (row as K8sJobItem).status === 'Failed' ? 'red' : 'yellow'">
+          {{ (row as K8sJobItem).status }}
+        </Badge>
+      </template>
+      <template #cell-suspend="{ row }">
+        <Badge :variant="(row as K8sCronJobItem).suspend ? 'yellow' : 'green'">
+          {{ (row as K8sCronJobItem).suspend ? '是' : '否' }}
+        </Badge>
+      </template>
       <template #cell-actions="{ row }">
         <RowActions :actions="buildActions(row as Record<string, unknown>)" :visible="3" />
       </template>
@@ -284,6 +351,6 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
     />
 
     <!-- 详情（YAML） -->
-    <ResourceDetailModal v-model:open="detailOpen" :title="detailTitle" :fetch-yaml="detailFetch" />
+    <ResourceDetailModal v-model:open="detailOpen" :title="detailTitle" :fetch-yaml="detailFetch" :resource-kind="detailKind" :resource-name="detailName" :resource-namespace="detailNamespace" @saved="load" />
   </div>
 </template>

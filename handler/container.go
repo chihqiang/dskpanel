@@ -394,3 +394,24 @@ func (h *ContainerHandler) Top(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.OkJSON(w, procs)
 }
+
+// Exec 在容器中执行一次性命令（非交互式）。
+func (h *ContainerHandler) Exec(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		httpx.WriteHTTPError(w, http.StatusBadRequest, "missing container id")
+		return
+	}
+	var req struct {
+		Command []string `json:"command" binding:"required"`
+	}
+	if err := httpx.MustBindJSON(w, r, &req); err != nil {
+		return
+	}
+	result, err := h.ctx.ContainerLogic.Exec(r.Context(), id, req.Command)
+	if err != nil {
+		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	httpx.OkJSON(w, result)
+}

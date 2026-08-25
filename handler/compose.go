@@ -147,3 +147,13 @@ func (h *ComposeHandler) ProjectLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.OkJSON(w, lines)
 }
+
+// ProjectConfig 读取 Compose 项目的配置文件内容。
+func (h *ComposeHandler) ProjectConfig(w http.ResponseWriter, r *http.Request) {
+	content, err := h.ctx.ComposeLogic.ProjectConfig(r.Context(), r.PathValue("name"))
+	if err != nil {
+		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	httpx.OkJSON(w, content)
+}

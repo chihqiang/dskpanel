@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Rocket, RefreshCw, Play, Square, RotateCw, Trash2, Eye, FileText, Layers } from '@lucide/vue'
+import { Rocket, RefreshCw, Play, Square, RotateCw, Trash2, Eye, FileText, Layers, FileCode } from '@lucide/vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
-import { ComposeDeployModal, ComposeProjectDetailModal, ComposeProjectLogsModal } from '@/components/docker'
+import { ComposeDeployModal, ComposeProjectDetailModal, ComposeProjectLogsModal, ComposeConfigModal } from '@/components/docker'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import {
@@ -36,6 +36,10 @@ const detailProject = ref<ComposeProjectItem | null>(null)
 // ---- 日志弹窗 ----
 const logsOpen = ref(false)
 const logsProject = ref<ComposeProjectItem | null>(null)
+
+// ---- 配置弹窗 ----
+const configOpen = ref(false)
+const configProject = ref<ComposeProjectItem | null>(null)
 
 async function load(): Promise<void> {
   loading.value = true
@@ -110,6 +114,11 @@ function openLogs(row: ComposeProjectItem): void {
   logsOpen.value = true
 }
 
+function openConfig(row: ComposeProjectItem): void {
+  configProject.value = row
+  configOpen.value = true
+}
+
 const columns: DataTableColumn[] = [
   { key: 'name', label: '项目名' },
   { key: 'status', label: '状态' },
@@ -126,6 +135,7 @@ function actionsFor(row: ComposeProjectItem): RowAction[] {
   const allStopped = row.running === 0
   return [
     { key: 'detail', label: '详情', icon: Eye, onClick: () => openDetail(row) },
+    { key: 'config', label: '配置', icon: FileCode, onClick: () => openConfig(row) },
     { key: 'logs', label: '日志', icon: FileText, onClick: () => openLogs(row) },
     { key: 'start', label: '启动', icon: Play, disabled: busy || allRunning, loading: busy, onClick: () => onStart(row) },
     { key: 'stop', label: '停止', icon: Square, disabled: busy || allStopped, loading: busy, onClick: () => onStop(row) },
@@ -195,5 +205,8 @@ function actionsFor(row: ComposeProjectItem): RowAction[] {
 
     <!-- 项目日志 -->
     <ComposeProjectLogsModal v-model:open="logsOpen" :project="logsProject" />
+
+    <!-- 项目配置 -->
+    <ComposeConfigModal v-model:open="configOpen" :project="configProject" @deployed="load" />
   </div>
 </template>

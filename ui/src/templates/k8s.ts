@@ -344,6 +344,168 @@ metadata:
 export const k8sNodeTemplates: YamlTemplate[] = [nodeLabel]
 
 // ──────────────────────────────────────────────
+// Namespace
+// ──────────────────────────────────────────────
+
+/** 命名空间。 */
+const namespace: YamlTemplate = {
+  name: 'Namespace',
+  desc: '创建命名空间',
+  yaml: `apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-namespace
+  labels:
+    environment: development
+`,
+}
+
+/** Namespace 模板集。 */
+export const k8sNamespaceTemplates: YamlTemplate[] = [namespace]
+
+// ──────────────────────────────────────────────
+// RBAC - Role / ClusterRole / RoleBinding / ClusterRoleBinding
+// ──────────────────────────────────────────────
+
+/** Role（命名空间级权限）。 */
+const role: YamlTemplate = {
+  name: 'Role',
+  desc: '命名空间级权限角色',
+  yaml: `apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "watch", "list"]
+`,
+}
+
+/** ClusterRole（集群级权限）。 */
+const clusterRole: YamlTemplate = {
+  name: 'ClusterRole',
+  desc: '集群级权限角色',
+  yaml: `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-reader
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "watch", "list"]
+`,
+}
+
+/** RoleBinding（将 Role 绑定到用户/组/ServiceAccount）。 */
+const roleBinding: YamlTemplate = {
+  name: 'RoleBinding',
+  desc: '将 Role 绑定到 ServiceAccount',
+  yaml: `apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: default
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+`,
+}
+
+/** ClusterRoleBinding（将 ClusterRole 绑定到用户/组/ServiceAccount）。 */
+const clusterRoleBinding: YamlTemplate = {
+  name: 'ClusterRoleBinding',
+  desc: '将 ClusterRole 绑定到 ServiceAccount',
+  yaml: `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: node-reader
+  apiGroup: rbac.authorization.k8s.io
+`,
+}
+
+/** RBAC 模板集。 */
+export const k8sRbacTemplates: YamlTemplate[] = [role, clusterRole, roleBinding, clusterRoleBinding]
+
+// ──────────────────────────────────────────────
+// HPA (HorizontalPodAutoscaler)
+// ──────────────────────────────────────────────
+
+/** CPU 自动伸缩 HPA。 */
+const cpuHPA: YamlTemplate = {
+  name: 'CPU 自动伸缩',
+  desc: '基于 CPU 利用率自动伸缩 Deployment',
+  yaml: `apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nginx-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+`,
+}
+
+/** CPU + 内存自动伸缩 HPA。 */
+const cpuMemHPA: YamlTemplate = {
+  name: 'CPU + 内存自动伸缩',
+  desc: '基于 CPU 和内存利用率双指标伸缩',
+  yaml: `apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: app
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+`,
+}
+
+/** HPA 模板集。 */
+export const k8sHpaTemplates: YamlTemplate[] = [cpuHPA, cpuMemHPA]
+
+// ──────────────────────────────────────────────
 // 通用（默认）
 // ──────────────────────────────────────────────
 

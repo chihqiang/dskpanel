@@ -6,6 +6,8 @@ import ResourceDetailModal from './ResourceDetailModal.vue'
 import NamespaceSelect from './NamespaceSelect.vue'
 import ResourceToolbar from './ResourceToolbar.vue'
 import YamlCreateModal from './YamlCreateModal.vue'
+import PodTerminalModal from './PodTerminalModal.vue'
+import ResourceEventsTab from './ResourceEventsTab.vue'
 
 export {
   NodeDetailModal,
@@ -16,4 +18,6 @@ export {
   NamespaceSelect,
   ResourceToolbar,
   YamlCreateModal,
+  PodTerminalModal,
+  ResourceEventsTab,
 }
