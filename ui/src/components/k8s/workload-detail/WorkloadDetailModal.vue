@@ -18,8 +18,7 @@ import ServicesTab from './ServicesTab.vue'
 import RevisionsTab from './RevisionsTab.vue'
 import TerminalModal from '@/components/ui/TerminalModal.vue'
 import LogsModal from '@/components/ui/LogsModal.vue'
-import { k8sRawYaml, streamK8sPodLogs, type K8sPodItem } from '@/api/k8s'
-import { getToken, ApiError } from '@/api/http'
+import { k8sRawYaml, k8sRawJSON, streamK8sPodLogs, type K8sPodItem } from '@/api/k8s'
 import {
   extractBasicInfo,
   extractLabelSelector,
@@ -119,23 +118,8 @@ async function loadDetail(): Promise<void> {
   yamlContent.value = ''
   activeTab.value = 'pods'
   try {
-    // 获取 JSON 格式的原始对象。
-    // 后端 writeK8sObject 在 ?format=json 时通过 httpx.OkJSON 输出，
-    // 返回 { code: 0, msg: "ok", data: <原始 K8s 对象> }，需要解包 data 字段。
-    const token = getToken()
-    const sep = props.inspectPath.includes('?') ? '&' : '?'
-    const resp = await fetch(`/api/v1/k8s/${props.inspectPath}${sep}format=json`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => '')
-      throw new ApiError(resp.status, text || `http ${resp.status}`)
-    }
-    const payload = (await resp.json()) as { code: number; msg: string; data: Record<string, unknown> }
-    if (payload.code !== 0) {
-      throw new ApiError(payload.code, payload.msg || 'unknown error')
-    }
-    rawData.value = payload.data
+    // 获取 JSON 格式的原始对象，http 封装会自动解包 ApiResponse.data。
+    rawData.value = await k8sRawJSON(props.inspectPath)
     // 同时获取 YAML（YAML 接口直接返回文本，不包裹）。
     yamlContent.value = await k8sRawYaml(props.inspectPath)
   } catch (err) {

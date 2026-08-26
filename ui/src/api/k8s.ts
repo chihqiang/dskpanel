@@ -632,6 +632,15 @@ export async function k8sRawYaml(path: string): Promise<string> {
   return resp.text()
 }
 
+/**
+ * 获取资源的原始 JSON 对象（后端 ?format=json，通过 httpx.OkJSON 返回 {code,msg,data}）。
+ * @param path 资源路径，如 `deployments/nginx?namespace=default`（可能已带 query）。
+ */
+export function k8sRawJSON(path: string): Promise<Record<string, unknown>> {
+  const sep = path.includes('?') ? '&' : '?'
+  return http.get<Record<string, unknown>>(`/api/v1/k8s/${path}${sep}format=json`)
+}
+
 /** PVC 列表。 */
 export function k8sPVCs(namespace?: string) {
   const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
