@@ -6,6 +6,7 @@ import NamespaceSelect from './NamespaceSelect.vue'
 import ResourceToolbar from './ResourceToolbar.vue'
 import YamlCreateModal from './YamlCreateModal.vue'
 import ResourceEventsTab from './ResourceEventsTab.vue'
+import { WorkloadDetailModal } from './workload-detail'
 
 export {
   NodeDetailModal,
@@ -16,4 +17,5 @@ export {
   ResourceToolbar,
   YamlCreateModal,
   ResourceEventsTab,
+  WorkloadDetailModal,
 }

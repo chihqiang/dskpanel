@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Eye, RefreshCw, RotateCw, SlidersHorizontal, Trash2 } from '@lucide/vue'
+import { Eye, FileText, RefreshCw, RotateCw, SlidersHorizontal, Trash2 } from '@lucide/vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
-import { ScaleModal, ResourceDetailModal, ResourceToolbar, YamlCreateModal } from '@/components/k8s'
+import { ScaleModal, ResourceDetailModal, ResourceToolbar, YamlCreateModal, WorkloadDetailModal } from '@/components/k8s'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { useNamespaces, ALL_NS } from '@/composables/useNamespaces'
@@ -32,6 +32,8 @@ import {
   type K8sJobItem,
   type K8sCronJobItem,
 } from '@/api/k8s'
+
+import type { WorkloadKind } from '@/components/k8s/workload-detail'
 
 type Tab = 'deployment' | 'statefulset' | 'daemonset' | 'job' | 'cronjob'
 
@@ -91,6 +93,31 @@ const detailFetch = ref<(() => Promise<string>) | null>(null)
 const detailKind = ref('')
 const detailName = ref('')
 const detailNamespace = ref('')
+
+// 工作负载详情弹窗。
+const wlDetailOpen = ref(false)
+const wlDetailKind = ref<WorkloadKind>('Deployment')
+const wlDetailName = ref('')
+const wlDetailNs = ref('')
+const wlDetailInspectPath = ref('')
+
+function openWorkloadDetail(kind: WorkloadKind, name: string, ns: string, tab: Tab): void {
+  wlDetailKind.value = kind
+  wlDetailName.value = name
+  wlDetailNs.value = ns
+  // 构造 inspect 路径。
+  const kindPath = tab === 'deployment'
+    ? 'deployments'
+    : tab === 'statefulset'
+      ? 'statefulsets'
+      : tab === 'daemonset'
+        ? 'daemonsets'
+        : tab === 'job'
+          ? 'jobs'
+          : 'cronjobs'
+  wlDetailInspectPath.value = `${kindPath}/${name}?namespace=${encodeURIComponent(ns)}`
+  wlDetailOpen.value = true
+}
 
 async function load(): Promise<void> {
   loading.value = true
@@ -240,7 +267,8 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
   if (activeTab.value === 'deployment') {
     const d = row as unknown as K8sDeploymentItem
     return [
-      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Deployment/${name}`, `deployments/${name}?namespace=${encodeURIComponent(ns)}`, 'Deployment', name, ns) },
+        { key: 'detail', label: '详情', icon: Eye, onClick: () => openWorkloadDetail('Deployment', name, ns, 'deployment') },
+      { key: 'yaml', label: 'YAML', icon: FileText, onClick: () => openYaml(`Deployment/${name}`, `deployments/${name}?namespace=${encodeURIComponent(ns)}`, 'Deployment', name, ns) },
       { key: 'scale', label: '伸缩', icon: SlidersHorizontal, onClick: () => openScale('deployment', name, ns, d.desired) },
       { key: 'restart', label: '重启', icon: RotateCw, onClick: () => restart('Deployment', name, () => k8sRestartDeployment(name, ns)) },
       { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('Deployment', name, () => k8sDeleteDeployment(name, ns)) },
@@ -249,7 +277,8 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
   if (activeTab.value === 'statefulset') {
     const s = row as unknown as K8sStatefulSetItem
     return [
-      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`StatefulSet/${name}`, `statefulsets/${name}?namespace=${encodeURIComponent(ns)}`, 'StatefulSet', name, ns) },
+        { key: 'detail', label: '详情', icon: Eye, onClick: () => openWorkloadDetail('StatefulSet', name, ns, 'statefulset') },
+      { key: 'yaml', label: 'YAML', icon: FileText, onClick: () => openYaml(`StatefulSet/${name}`, `statefulsets/${name}?namespace=${encodeURIComponent(ns)}`, 'StatefulSet', name, ns) },
       { key: 'scale', label: '伸缩', icon: SlidersHorizontal, onClick: () => openScale('statefulset', name, ns, s.replicas) },
       { key: 'restart', label: '重启', icon: RotateCw, onClick: () => restart('StatefulSet', name, () => k8sRestartStatefulSet(name, ns)) },
       { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('StatefulSet', name, () => k8sDeleteStatefulSet(name, ns)) },
@@ -257,19 +286,22 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
   }
   if (activeTab.value === 'daemonset') {
     return [
-      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`DaemonSet/${name}`, `daemonsets/${name}?namespace=${encodeURIComponent(ns)}`, 'DaemonSet', name, ns) },
+      { key: 'detail', label: '详情', icon: Eye, onClick: () => openWorkloadDetail('DaemonSet', name, ns, 'daemonset') },
+      { key: 'yaml', label: 'YAML', icon: FileText, onClick: () => openYaml(`DaemonSet/${name}`, `daemonsets/${name}?namespace=${encodeURIComponent(ns)}`, 'DaemonSet', name, ns) },
       { key: 'restart', label: '重启', icon: RotateCw, onClick: () => restart('DaemonSet', name, () => k8sRestartDaemonSet(name, ns)) },
       { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('DaemonSet', name, () => k8sDeleteDaemonSet(name, ns)) },
     ]
   }
   if (activeTab.value === 'job') {
     return [
-      { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`Job/${name}`, `jobs/${name}?namespace=${encodeURIComponent(ns)}`, 'Job', name, ns) },
+      { key: 'detail', label: '详情', icon: Eye, onClick: () => openWorkloadDetail('Job', name, ns, 'job') },
+      { key: 'yaml', label: 'YAML', icon: FileText, onClick: () => openYaml(`Job/${name}`, `jobs/${name}?namespace=${encodeURIComponent(ns)}`, 'Job', name, ns) },
       { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('Job', name, () => k8sDeleteJob(name, ns)) },
     ]
   }
   return [
-    { key: 'detail', label: 'YAML', icon: Eye, onClick: () => openYaml(`CronJob/${name}`, `cronjobs/${name}?namespace=${encodeURIComponent(ns)}`, 'CronJob', name, ns) },
+    { key: 'detail', label: '详情', icon: Eye, onClick: () => openWorkloadDetail('CronJob', name, ns, 'cronjob') },
+    { key: 'yaml', label: 'YAML', icon: FileText, onClick: () => openYaml(`CronJob/${name}`, `cronjobs/${name}?namespace=${encodeURIComponent(ns)}`, 'CronJob', name, ns) },
     { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => remove('CronJob', name, () => k8sDeleteCronJob(name, ns)) },
   ]
 }
@@ -352,5 +384,14 @@ function buildActions(row: Record<string, unknown>): RowAction[] {
 
     <!-- 详情（YAML） -->
     <ResourceDetailModal v-model:open="detailOpen" :title="detailTitle" :fetch-yaml="detailFetch" :resource-kind="detailKind" :resource-name="detailName" :resource-namespace="detailNamespace" @saved="load" />
+
+    <!-- 工作负载详情 -->
+    <WorkloadDetailModal
+      v-model:open="wlDetailOpen"
+      :kind="wlDetailKind"
+      :name="wlDetailName"
+      :namespace="wlDetailNs"
+      :inspect-path="wlDetailInspectPath"
+    />
   </div>
 </template>
