@@ -1,8 +1,6 @@
 import CreateContainerModal from './CreateContainerModal.vue'
-import ContainerLogsModal from './ContainerLogsModal.vue'
 import ContainerDetailModal from './ContainerDetailModal.vue'
 import ContainerStatsModal from './ContainerStatsModal.vue'
-import RenameContainerModal from './RenameContainerModal.vue'
 import PullImageModal from './PullImageModal.vue'
 import PushImageModal from './PushImageModal.vue'
 import RunImageModal from './RunImageModal.vue'
@@ -21,10 +19,8 @@ import ComposeConfigModal from './ComposeConfigModal.vue'
 
 export {
   CreateContainerModal,
-  ContainerLogsModal,
   ContainerDetailModal,
   ContainerStatsModal,
-  RenameContainerModal,
   PullImageModal,
   PushImageModal,
   RunImageModal,

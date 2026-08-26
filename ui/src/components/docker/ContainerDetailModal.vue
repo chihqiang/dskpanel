@@ -11,7 +11,6 @@ import {
   inspectContainerRaw,
   updateContainer,
   renameContainer,
-  execContainer,
   type ContainerDetail,
 } from '@/api/container'
 import { disconnectContainerFromNetwork } from '@/api/network'
@@ -32,12 +31,6 @@ const confirm = useConfirm()
 
 // 断开网络。
 const disconnectingNet = ref('')
-
-// exec 一次性命令。
-const execShown = ref(false)
-const execCommand = ref('')
-const execOutput = ref('')
-const execBusy = ref(false)
 
 // 完整 inspect 原始 JSON。
 const rawOpen = ref(false)
@@ -63,6 +56,7 @@ watch(
       load()
     }
   },
+  { immediate: true },
 )
 
 async function load(): Promise<void> {
@@ -184,21 +178,6 @@ function fmtPorts(ports?: Record<string, { private_port: number; public_port?: n
       return first?.public_port ? `${first.public_port}->${k}` : k
     })
     .join(', ')
-}
-
-/** 执行一次性命令。 */
-async function runExec(): Promise<void> {
-  if (!props.containerId || !execCommand.value.trim()) return
-  execBusy.value = true
-  execOutput.value = ''
-  try {
-    const result = await execContainer(props.containerId, execCommand.value.trim().split(/\s+/))
-    execOutput.value = [result.stdout, result.stderr].filter(Boolean).join('\n') || '（无输出）'
-  } catch (err) {
-    execOutput.value = (err as Error).message
-  } finally {
-    execBusy.value = false
-  }
 }
 
 function openDisconnectNetwork(netName: string): void {
@@ -363,29 +342,6 @@ function openDisconnectNetwork(netName: string): void {
           <label class="mb-1 block text-xs text-slate-500">标签 ({{ Object.keys(detail.config.labels).length }})</label>
           <div class="max-h-32 overflow-y-auto rounded-md bg-slate-100 px-3 py-2 font-mono text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200">
             <div v-for="(v, k) in detail.config.labels" :key="k">{{ k }}={{ v }}</div>
-          </div>
-        </div>
-
-        <!-- 执行命令 -->
-        <div v-if="detail.state === 'running'">
-          <button
-            class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-            @click="execShown = !execShown"
-          >
-            {{ execShown ? '收起命令执行' : '展开命令执行（exec）' }}
-          </button>
-          <div v-if="execShown" class="mt-2 space-y-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <input
-                v-model="execCommand"
-                type="text"
-                class="input input-sm flex-1"
-                placeholder="例如 ls -la / env（一次性执行，非交互）"
-                @keydown.enter="runExec"
-              />
-              <Button size="sm" :loading="execBusy" @click="runExec">执行</Button>
-            </div>
-            <pre class="max-h-64 overflow-auto rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-green-300">{{ execOutput || '—' }}</pre>
           </div>
         </div>
 

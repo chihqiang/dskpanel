@@ -17,11 +17,11 @@ import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import CreateContainerModal from '@/components/docker/CreateContainerModal.vue'
-import ContainerLogsModal from '@/components/docker/ContainerLogsModal.vue'
+import LogsModal from '@/components/ui/LogsModal.vue'
 import ContainerDetailModal from '@/components/docker/ContainerDetailModal.vue'
 import ContainerStatsModal from '@/components/docker/ContainerStatsModal.vue'
-import ContainerTerminalModal from '@/components/docker/ContainerTerminalModal.vue'
-import RenameContainerModal from '@/components/docker/RenameContainerModal.vue'
+import TerminalModal from '@/components/ui/TerminalModal.vue'
+import RenameModal from '@/components/ui/RenameModal.vue'
 import CommitContainerModal from '@/components/docker/CommitContainerModal.vue'
 import UpdateContainerModal from '@/components/docker/UpdateContainerModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
@@ -36,6 +36,9 @@ import {
   pauseContainer,
   unpauseContainer,
   exportContainer,
+  renameContainer,
+  streamContainerLogs,
+  getContainerLogs,
   type ContainerItem,
 } from '@/api/container'
 
@@ -328,6 +331,23 @@ function openLogs(row: ContainerItem): void {
   logOpen.value = true
 }
 
+/** LogsModal stream 包装。 */
+function streamLogs(tail: string, _container: string, onLine: (line: string) => void, onError: (msg: string) => void, onClose: () => void): () => void {
+  return streamContainerLogs(logContainer.value!.id, tail, onLine, onError, onClose)
+}
+
+/** LogsModal download 包装。 */
+async function downloadLogs(): Promise<{ name: string; text: string }> {
+  const c = logContainer.value!
+  const text = await getContainerLogs(c.id, '10000')
+  return { name: `${c.names[0] ?? c.id.slice(0, 12)}-logs.txt`, text }
+}
+
+/** RenameModal submit 包装。 */
+async function submitRename(newName: string): Promise<void> {
+  await renameContainer(renameTarget.value!.id, newName)
+}
+
 /** 复制容器 ID 到剪贴板。 */
 async function copyId(row: ContainerItem): Promise<void> {
   await copy(row.id, '已复制容器 ID')
@@ -456,11 +476,14 @@ function fmtPorts(item: ContainerItem): string {
     <CreateContainerModal v-model:open="createOpen" @created="load" />
 
     <!-- 日志 -->
-    <ContainerLogsModal
+    <LogsModal
       v-if="logContainer"
       v-model:open="logOpen"
-      :container-id="logContainer.id"
-      :container-name="logContainer.names[0] ?? ''"
+      :title="`日志 - ${logContainer.names[0] ?? logContainer.id.slice(0, 12)}`"
+      :stream="streamLogs"
+      :download="downloadLogs"
+      width="max-w-3xl"
+      height="h-96"
     />
 
     <!-- 详情 -->
@@ -481,19 +504,22 @@ function fmtPorts(item: ContainerItem): string {
     />
 
     <!-- 终端 -->
-    <ContainerTerminalModal
+    <TerminalModal
       v-if="terminalContainer"
       v-model:open="terminalOpen"
-      :container-id="terminalContainer.id"
-      :container-name="terminalContainer.names[0] ?? ''"
+      :url="`/api/v1/containers/${terminalContainer.id}/terminal`"
+      :title="`终端 - ${terminalContainer.names[0] ?? terminalContainer.id.slice(0, 12)}`"
     />
 
     <!-- 重命名 -->
-    <RenameContainerModal
+    <RenameModal
       v-if="renameTarget"
       v-model:open="renameOpen"
-      :container-id="renameTarget.id"
+      title="重命名容器"
+      label="容器名称"
       :current-name="renameTarget.names[0] ?? ''"
+      placeholder="my-container"
+      :submit="submitRename"
       @renamed="load"
     />
 

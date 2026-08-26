@@ -589,15 +589,6 @@ export function k8sDeleteSecret(name: string, namespace: string) {
   return http.delete<string>(`/api/v1/k8s/secrets/${name}?namespace=${encodeURIComponent(namespace)}`)
 }
 
-/** 事件列表。 */
-export function k8sEvents(namespace?: string, fieldSelector = '') {
-  const params = new URLSearchParams()
-  if (namespace) params.set('namespace', namespace)
-  if (fieldSelector) params.set('fieldSelector', fieldSelector)
-  const qs = params.toString()
-  return http.get<K8sEventItem[]>(`/api/v1/k8s/events${qs ? `?${qs}` : ''}`)
-}
-
 /** 查询特定资源的事件（如 Pod / Deployment / Node）。 */
 export function k8sResourceEvents(kind: string, name: string, namespace: string) {
   const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''

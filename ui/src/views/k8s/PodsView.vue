@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Eye, FileText, Trash2, RefreshCw } from '@lucide/vue'
+import { FileText, Trash2, RefreshCw, Terminal } from '@lucide/vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import RowActions, { type RowAction } from '@/components/ui/RowActions.vue'
-import { PodDetailModal, PodLogsModal, ResourceToolbar, YamlCreateModal } from '@/components/k8s'
+import LogsModal from '@/components/ui/LogsModal.vue'
+import TerminalModal from '@/components/ui/TerminalModal.vue'
+import { PodDetailModal, ResourceToolbar, YamlCreateModal } from '@/components/k8s'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { useNamespaces, ALL_NS } from '@/composables/useNamespaces'
 import { k8sPodTemplates } from '@/templates'
 import { podPhaseVariant } from '@/utils/k8s'
-import { k8sPods, k8sDeletePod, type K8sPodItem } from '@/api/k8s'
+import { k8sPods, k8sDeletePod, streamK8sPodLogs, type K8sPodItem } from '@/api/k8s'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -28,11 +30,13 @@ const keyword = ref('')
 // YAML 创建弹窗。
 const createOpen = ref(false)
 
-// 详情 / 日志弹窗。
+// 详情 / 日志 / 终端弹窗。
 const detailOpen = ref(false)
 const detailPod = ref<K8sPodItem | null>(null)
 const logsOpen = ref(false)
 const logsPod = ref<K8sPodItem | null>(null)
+const terminalOpen = ref(false)
+const terminalPod = ref<K8sPodItem | null>(null)
 
 /** 按名称过滤后的列表。 */
 const filtered = computed(() => {
@@ -84,10 +88,30 @@ function openLogs(row: K8sPodItem): void {
   logsOpen.value = true
 }
 
+function openTerminal(row: K8sPodItem): void {
+  terminalPod.value = row
+  terminalOpen.value = true
+}
+
+/** 构建 Pod 终端 ws 地址。 */
+const terminalWsUrl = computed(() => {
+  if (!terminalPod.value) return ''
+  const params = new URLSearchParams({ namespace: terminalPod.value.namespace })
+  const c = terminalPod.value.containers?.[0]?.name
+  if (c) params.set('container', c)
+  return `/api/v1/k8s/pods/${terminalPod.value.name}/terminal?${params}`
+})
+
+/** LogsModal stream 包装。 */
+function streamLogs(tail: string, container: string, onLine: (line: string) => void, onError: (msg: string) => void, onClose: () => void): () => void {
+  const p = logsPod.value!
+  return streamK8sPodLogs(p.name, p.namespace, Number(tail), container, onLine, onError, onClose)
+}
+
 function buildActions(row: K8sPodItem): RowAction[] {
   return [
-    { key: 'detail', label: '详情', icon: Eye, onClick: () => openDetail(row) },
     { key: 'logs', label: '日志', icon: FileText, onClick: () => openLogs(row) },
+    { key: 'terminal', label: '终端', icon: Terminal, disabled: row.status !== 'Running', onClick: () => openTerminal(row) },
     { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => removePod(row) },
   ]
 }
@@ -133,6 +157,15 @@ const columns = computed<DataTableColumn[]>(() => {
       :empty-text="keyword ? '无匹配的 Pod' : '当前命名空间下暂无 Pod'"
       @retry="load"
     >
+      <!-- 名称列：点击打开详情 -->
+      <template #cell-name="{ row }">
+        <span
+          class="cursor-pointer font-medium text-blue-600 hover:underline dark:text-blue-400"
+          @click="openDetail(row as K8sPodItem)"
+        >
+          {{ (row as K8sPodItem).name }}
+        </span>
+      </template>
       <template #cell-status="{ row }">
         <Badge :variant="podPhaseVariant((row as K8sPodItem).status)" dot>
           {{ (row as K8sPodItem).status }}
@@ -144,7 +177,7 @@ const columns = computed<DataTableColumn[]>(() => {
         </span>
       </template>
       <template #cell-actions="{ row }">
-        <RowActions :actions="buildActions(row as K8sPodItem)" :visible="2" />
+        <RowActions :actions="buildActions(row as K8sPodItem)" :visible="3" />
       </template>
     </DataTable>
 
@@ -155,6 +188,20 @@ const columns = computed<DataTableColumn[]>(() => {
     <PodDetailModal v-model:open="detailOpen" :pod="detailPod" />
 
     <!-- Pod 日志 -->
-    <PodLogsModal v-model:open="logsOpen" :pod="logsPod" />
+    <LogsModal
+      v-if="logsPod"
+      v-model:open="logsOpen"
+      :title="`Pod 日志 - ${logsPod.name}`"
+      :stream="streamLogs"
+      :containers="logsPod.containers ?? []"
+    />
+
+    <!-- Pod 终端 -->
+    <TerminalModal
+      v-if="terminalPod"
+      v-model:open="terminalOpen"
+      :url="terminalWsUrl"
+      :title="`终端 - ${terminalPod.name}`"
+    />
   </div>
 </template>
