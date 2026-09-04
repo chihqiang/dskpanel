@@ -57,21 +57,19 @@ func (h *ComposeHandler) DeployStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sse, err := NewSSEWriter(w)
-	if err != nil {
-		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	sse := httpx.NewSSEWriter(w)
 	// 握手事件。
-	sse.Open()
+	_ = sse.Event("open", "connected")
 
 	ok, err := h.ctx.ComposeLogic.DeployStream(r.Context(), req.Content, func(line string) {
-		sse.Data(line)
+		_ = sse.Data(line)
 	})
 	if err != nil {
-		sse.Error(err.Error())
+		_ = sse.Event("error", err.Error())
+	} else if ok {
+		_ = sse.Event("done", "success")
 	} else {
-		sse.Done(ok)
+		_ = sse.Event("done", "fail")
 	}
 }
 

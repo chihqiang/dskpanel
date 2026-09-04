@@ -62,21 +62,17 @@ func (h *DockerHandler) PruneAll(w http.ResponseWriter, r *http.Request) {
 
 // Events 订阅 Docker 系统事件（SSE 流式推送 JSON）。
 func (h *DockerHandler) Events(w http.ResponseWriter, r *http.Request) {
-	sse, err := NewSSEWriter(w)
-	if err != nil {
-		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	sse.Open()
+	sse := httpx.NewSSEWriter(w)
+	_ = sse.Event("open", "connected")
 
-	err = h.ctx.DockerLogic.StreamEvents(r.Context(), func(ev logic.DockerEvent) {
+	err := h.ctx.DockerLogic.StreamEvents(r.Context(), func(ev logic.DockerEvent) {
 		data, mErr := json.Marshal(ev)
 		if mErr != nil {
 			return
 		}
-		sse.Data(string(data))
+		_ = sse.Data(string(data))
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {
-		sse.Error(err.Error())
+		_ = sse.Event("error", err.Error())
 	}
 }

@@ -34,7 +34,7 @@ func (h *K8sHandler) ListDeployments(w http.ResponseWriter, r *http.Request) {
 
 // InspectDeployment Deployment 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectDeployment(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	dep, err := h.ctx.K8sLogic.InspectDeployment(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -45,7 +45,7 @@ func (h *K8sHandler) InspectDeployment(w http.ResponseWriter, r *http.Request) {
 
 // DeleteDeployment 删除 Deployment（NotFound 幂等）。
 func (h *K8sHandler) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteDeployment(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
@@ -58,7 +58,7 @@ func (h *K8sHandler) ScaleDeployment(w http.ResponseWriter, r *http.Request) {
 	if err := httpx.MustBindJSON(w, r, &req); err != nil {
 		return
 	}
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	if err := h.ctx.K8sLogic.ScaleDeployment(r.Context(), namespace, r.PathValue("name"), req.Replicas); err != nil {
 		writeK8sError(w, err)
 		return
@@ -68,7 +68,7 @@ func (h *K8sHandler) ScaleDeployment(w http.ResponseWriter, r *http.Request) {
 
 // RestartDeployment 重启 Deployment（滚动重启）。
 func (h *K8sHandler) RestartDeployment(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	if err := h.ctx.K8sLogic.RestartDeployment(r.Context(), namespace, r.PathValue("name")); err != nil {
 		writeK8sError(w, err)
 		return
@@ -102,7 +102,7 @@ func (h *K8sHandler) ListStatefulSets(w http.ResponseWriter, r *http.Request) {
 
 // InspectStatefulSet StatefulSet 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectStatefulSet(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	sts, err := h.ctx.K8sLogic.InspectStatefulSet(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -113,7 +113,7 @@ func (h *K8sHandler) InspectStatefulSet(w http.ResponseWriter, r *http.Request) 
 
 // DeleteStatefulSet 删除 StatefulSet（NotFound 幂等）。
 func (h *K8sHandler) DeleteStatefulSet(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteStatefulSet(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
@@ -126,7 +126,7 @@ func (h *K8sHandler) ScaleStatefulSet(w http.ResponseWriter, r *http.Request) {
 	if err := httpx.MustBindJSON(w, r, &req); err != nil {
 		return
 	}
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	if err := h.ctx.K8sLogic.ScaleStatefulSet(r.Context(), namespace, r.PathValue("name"), req.Replicas); err != nil {
 		writeK8sError(w, err)
 		return
@@ -136,7 +136,7 @@ func (h *K8sHandler) ScaleStatefulSet(w http.ResponseWriter, r *http.Request) {
 
 // RestartStatefulSet 重启 StatefulSet。
 func (h *K8sHandler) RestartStatefulSet(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	if err := h.ctx.K8sLogic.RestartStatefulSet(r.Context(), namespace, r.PathValue("name")); err != nil {
 		writeK8sError(w, err)
 		return
@@ -170,7 +170,7 @@ func (h *K8sHandler) ListDaemonSets(w http.ResponseWriter, r *http.Request) {
 
 // InspectDaemonSet DaemonSet 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectDaemonSet(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	ds, err := h.ctx.K8sLogic.InspectDaemonSet(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -181,14 +181,14 @@ func (h *K8sHandler) InspectDaemonSet(w http.ResponseWriter, r *http.Request) {
 
 // DeleteDaemonSet 删除 DaemonSet（NotFound 幂等）。
 func (h *K8sHandler) DeleteDaemonSet(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteDaemonSet(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
 
 // RestartDaemonSet 重启 DaemonSet。
 func (h *K8sHandler) RestartDaemonSet(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	if err := h.ctx.K8sLogic.RestartDaemonSet(r.Context(), namespace, r.PathValue("name")); err != nil {
 		writeK8sError(w, err)
 		return

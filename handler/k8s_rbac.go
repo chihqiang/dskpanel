@@ -38,7 +38,7 @@ func (h *K8sHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 
 // InspectRole Role 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectRole(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	role, err := h.ctx.K8sLogic.InspectRole(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -49,7 +49,7 @@ func (h *K8sHandler) InspectRole(w http.ResponseWriter, r *http.Request) {
 
 // DeleteRole 删除 Role（NotFound 幂等）。
 func (h *K8sHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteRole(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
@@ -90,7 +90,7 @@ func (h *K8sHandler) DeleteClusterRole(w http.ResponseWriter, r *http.Request) {
 
 // ListRoleBindings RoleBinding 列表。
 func (h *K8sHandler) ListRoleBindings(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	items, err := h.ctx.K8sLogic.ListRoleBindings(r.Context(), namespace)
 	if err != nil {
 		writeK8sError(w, err)
@@ -101,7 +101,7 @@ func (h *K8sHandler) ListRoleBindings(w http.ResponseWriter, r *http.Request) {
 
 // InspectRoleBinding RoleBinding 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectRoleBinding(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	rb, err := h.ctx.K8sLogic.InspectRoleBinding(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -112,7 +112,7 @@ func (h *K8sHandler) InspectRoleBinding(w http.ResponseWriter, r *http.Request) 
 
 // DeleteRoleBinding 删除 RoleBinding（NotFound 幂等）。
 func (h *K8sHandler) DeleteRoleBinding(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteRoleBinding(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }

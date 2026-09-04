@@ -124,7 +124,7 @@ func (h *K8sHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 // ListEventsForResource 查询特定资源的事件（如 Pod / Deployment / Node）。
 func (h *K8sHandler) ListEventsForResource(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	kind := r.PathValue("kind")
 	name := r.PathValue("name")
 	items, err := h.ctx.K8sLogic.ListEventsForObject(r.Context(), namespace, kind, name)

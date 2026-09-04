@@ -142,13 +142,9 @@ func (h *ContainerHandler) LogsStream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	sse, err := NewSSEWriter(w)
-	if err != nil {
-		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	sse := httpx.NewSSEWriter(w)
 	// 先发一个连接事件，告知前端流已建立。
-	sse.Open()
+	_ = sse.Event("open", "connected")
 
 	buf := make([]byte, 4096)
 	var pending []byte
@@ -159,7 +155,7 @@ func (h *ContainerHandler) LogsStream(w http.ResponseWriter, r *http.Request) {
 		line := bytes.TrimRight(pending, "\r\n")
 		pending = pending[:0]
 		if len(line) > 0 {
-			sse.Data(string(line))
+			_ = sse.Data(string(line))
 		}
 	}
 
@@ -177,7 +173,7 @@ func (h *ContainerHandler) LogsStream(w http.ResponseWriter, r *http.Request) {
 				pending = pending[idx+1:]
 				line = bytes.TrimRight(line, "\r")
 				if len(line) > 0 {
-					sse.Data(string(line))
+					_ = sse.Data(string(line))
 				}
 			}
 		}
@@ -185,7 +181,7 @@ func (h *ContainerHandler) LogsStream(w http.ResponseWriter, r *http.Request) {
 			if err != io.EOF {
 				// 读取错误：先 flush 残余，再发错误事件。
 				flushPending()
-				sse.Error(err.Error())
+				_ = sse.Event("error", err.Error())
 			}
 			return
 		}

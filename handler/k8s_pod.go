@@ -39,7 +39,7 @@ func (h *K8sHandler) ListPods(w http.ResponseWriter, r *http.Request) {
 
 // InspectPod Pod 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectPod(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	pod, err := h.ctx.K8sLogic.InspectPod(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -50,7 +50,7 @@ func (h *K8sHandler) InspectPod(w http.ResponseWriter, r *http.Request) {
 
 // DeletePod 删除 Pod（NotFound 幂等）。
 func (h *K8sHandler) DeletePod(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeletePod(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
@@ -111,12 +111,8 @@ func (h *K8sHandler) PodLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	sse, err := NewSSEWriter(w)
-	if err != nil {
-		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	sse.Open()
+	sse := httpx.NewSSEWriter(w)
+	_ = sse.Event("open", "connected")
 
 	buf := make([]byte, 4096)
 	var pending []byte
@@ -127,7 +123,7 @@ func (h *K8sHandler) PodLogs(w http.ResponseWriter, r *http.Request) {
 		line := bytes.TrimRight(pending, "\r\n")
 		pending = pending[:0]
 		if len(line) > 0 {
-			sse.Data(string(line))
+			_ = sse.Data(string(line))
 		}
 	}
 
@@ -144,14 +140,14 @@ func (h *K8sHandler) PodLogs(w http.ResponseWriter, r *http.Request) {
 				pending = pending[idx+1:]
 				line = bytes.TrimRight(line, "\r")
 				if len(line) > 0 {
-					sse.Data(string(line))
+					_ = sse.Data(string(line))
 				}
 			}
 		}
 		if err != nil {
 			if err != io.EOF {
 				flushPending()
-				sse.Error(err.Error())
+				_ = sse.Event("error", err.Error())
 			}
 			return
 		}
@@ -188,7 +184,7 @@ func (h *K8sHandler) ExecPod(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/k8s/pods/{name}/terminal?namespace=xxx&container=xxx
 // 升级为 WebSocket 后，将 exec 的 stdin/stdout 与 ws 双向桥接。
 func (h *K8sHandler) PodTerminal(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	container := r.URL.Query().Get("container")
 	podName := r.PathValue("name")
 	if podName == "" {

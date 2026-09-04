@@ -227,12 +227,8 @@ func (h *SwarmHandler) TaskLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	sse, err := NewSSEWriter(w)
-	if err != nil {
-		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	sse.Open()
+	sse := httpx.NewSSEWriter(w)
+	_ = sse.Event("open", "connected")
 
 	buf := make([]byte, 4096)
 	var pending []byte
@@ -243,7 +239,7 @@ func (h *SwarmHandler) TaskLogs(w http.ResponseWriter, r *http.Request) {
 		line := bytes.TrimRight(pending, "\r\n")
 		pending = pending[:0]
 		if len(line) > 0 {
-			sse.Data(string(line))
+			_ = sse.Data(string(line))
 		}
 	}
 
@@ -260,14 +256,14 @@ func (h *SwarmHandler) TaskLogs(w http.ResponseWriter, r *http.Request) {
 				pending = pending[idx+1:]
 				line = bytes.TrimRight(line, "\r")
 				if len(line) > 0 {
-					sse.Data(string(line))
+					_ = sse.Data(string(line))
 				}
 			}
 		}
 		if err != nil {
 			if err != io.EOF {
 				flushPending()
-				sse.Error(err.Error())
+				_ = sse.Event("error", err.Error())
 			}
 			return
 		}
@@ -291,12 +287,8 @@ func (h *SwarmHandler) ServiceLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	sse, err := NewSSEWriter(w)
-	if err != nil {
-		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	sse.Open()
+	sse := httpx.NewSSEWriter(w)
+	_ = sse.Event("open", "connected")
 
 	buf := make([]byte, 4096)
 	var pending []byte
@@ -307,7 +299,7 @@ func (h *SwarmHandler) ServiceLogs(w http.ResponseWriter, r *http.Request) {
 		line := bytes.TrimRight(pending, "\r\n")
 		pending = pending[:0]
 		if len(line) > 0 {
-			sse.Data(string(line))
+			_ = sse.Data(string(line))
 		}
 	}
 
@@ -324,14 +316,14 @@ func (h *SwarmHandler) ServiceLogs(w http.ResponseWriter, r *http.Request) {
 				pending = pending[idx+1:]
 				line = bytes.TrimRight(line, "\r")
 				if len(line) > 0 {
-					sse.Data(string(line))
+					_ = sse.Data(string(line))
 				}
 			}
 		}
 		if err != nil {
 			if err != io.EOF {
 				flushPending()
-				sse.Error(err.Error())
+				_ = sse.Event("error", err.Error())
 			}
 			return
 		}

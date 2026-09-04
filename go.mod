@@ -3,7 +3,7 @@ module chihqiang/dskpanel
 go 1.26.3
 
 require (
-	github.com/chihqiang/infra-go v0.0.0-20260903113615-88fb35764c0c
+	github.com/chihqiang/infra-go v0.0.0-20260903144851-7aaf32cd3a63
 	github.com/compose-spec/compose-go/v2 v2.14.0
 	github.com/docker/cli v29.7.2+incompatible
 	github.com/docker/compose/v5 v5.5.0

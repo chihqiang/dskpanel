@@ -34,7 +34,7 @@ func (h *K8sHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 
 // InspectJob Job 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectJob(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	job, err := h.ctx.K8sLogic.InspectJob(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -45,7 +45,7 @@ func (h *K8sHandler) InspectJob(w http.ResponseWriter, r *http.Request) {
 
 // DeleteJob 删除 Job（NotFound 幂等）。
 func (h *K8sHandler) DeleteJob(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteJob(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
@@ -76,7 +76,7 @@ func (h *K8sHandler) ListCronJobs(w http.ResponseWriter, r *http.Request) {
 
 // InspectCronJob CronJob 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectCronJob(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	cj, err := h.ctx.K8sLogic.InspectCronJob(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -87,7 +87,7 @@ func (h *K8sHandler) InspectCronJob(w http.ResponseWriter, r *http.Request) {
 
 // DeleteCronJob 删除 CronJob（NotFound 幂等）。
 func (h *K8sHandler) DeleteCronJob(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteCronJob(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }

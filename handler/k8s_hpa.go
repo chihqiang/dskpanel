@@ -34,7 +34,7 @@ func (h *K8sHandler) ListHPAs(w http.ResponseWriter, r *http.Request) {
 
 // InspectHPA HPA 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectHPA(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	hpa, err := h.ctx.K8sLogic.InspectHPA(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -45,7 +45,7 @@ func (h *K8sHandler) InspectHPA(w http.ResponseWriter, r *http.Request) {
 
 // DeleteHPA 删除 HPA（NotFound 幂等）。
 func (h *K8sHandler) DeleteHPA(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteHPA(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }

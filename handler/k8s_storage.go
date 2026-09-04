@@ -34,7 +34,7 @@ func (h *K8sHandler) ListPVCs(w http.ResponseWriter, r *http.Request) {
 
 // InspectPVC PVC 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectPVC(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	pvc, err := h.ctx.K8sLogic.InspectPVC(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -45,7 +45,7 @@ func (h *K8sHandler) InspectPVC(w http.ResponseWriter, r *http.Request) {
 
 // DeletePVC 删除 PVC（NotFound 幂等）。
 func (h *K8sHandler) DeletePVC(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeletePVC(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }

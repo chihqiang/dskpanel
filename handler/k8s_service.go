@@ -34,7 +34,7 @@ func (h *K8sHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 
 // InspectService Service 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectService(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	svc, err := h.ctx.K8sLogic.InspectService(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -45,7 +45,7 @@ func (h *K8sHandler) InspectService(w http.ResponseWriter, r *http.Request) {
 
 // DeleteService 删除 Service（NotFound 幂等）。
 func (h *K8sHandler) DeleteService(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteService(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
@@ -76,7 +76,7 @@ func (h *K8sHandler) ListIngresses(w http.ResponseWriter, r *http.Request) {
 
 // InspectIngress Ingress 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectIngress(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	ing, err := h.ctx.K8sLogic.InspectIngress(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -87,7 +87,7 @@ func (h *K8sHandler) InspectIngress(w http.ResponseWriter, r *http.Request) {
 
 // DeleteIngress 删除 Ingress（NotFound 幂等）。
 func (h *K8sHandler) DeleteIngress(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteIngress(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }

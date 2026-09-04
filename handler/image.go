@@ -64,13 +64,9 @@ func (h *ImageHandler) Pull(w http.ResponseWriter, r *http.Request) {
 	}
 	defer body.Close()
 
-	sse, err := NewSSEWriter(w)
-	if err != nil {
-		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	sse := httpx.NewSSEWriter(w)
 	// 先发握手事件。
-	sse.Open()
+	_ = sse.Event("open", "connected")
 
 	dec := json.NewDecoder(body)
 	for {
@@ -79,10 +75,10 @@ func (h *ImageHandler) Pull(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		// 每个 JSON 消息作为一行 data 推送。
-		sse.Data(string(msg))
+		_ = sse.Data(string(msg))
 	}
 	// 结束事件。
-	sse.Done(true)
+	_ = sse.Event("done", "success")
 }
 
 // RemoveBatch 批量删除镜像。
@@ -138,13 +134,9 @@ func (h *ImageHandler) Push(w http.ResponseWriter, r *http.Request) {
 	}
 	defer body.Close()
 
-	sse, err := NewSSEWriter(w)
-	if err != nil {
-		httpx.WriteHTTPError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	sse := httpx.NewSSEWriter(w)
 	// 先发握手事件。
-	sse.Open()
+	_ = sse.Event("open", "connected")
 
 	// 读取并转发 JSON 流消息。
 	dec := json.NewDecoder(body)
@@ -153,9 +145,9 @@ func (h *ImageHandler) Push(w http.ResponseWriter, r *http.Request) {
 		if err := dec.Decode(&msg); err != nil {
 			break
 		}
-		sse.Data(string(msg))
+		_ = sse.Data(string(msg))
 	}
-	sse.Done(true)
+	_ = sse.Event("done", "success")
 }
 
 // Inspect 镜像详情（含 Layers）。

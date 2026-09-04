@@ -34,7 +34,7 @@ func (h *K8sHandler) ListConfigMaps(w http.ResponseWriter, r *http.Request) {
 
 // InspectConfigMap ConfigMap 详情（支持 ?format=yaml）。
 func (h *K8sHandler) InspectConfigMap(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	cm, err := h.ctx.K8sLogic.InspectConfigMap(r.Context(), namespace, r.PathValue("name"))
 	if err != nil {
 		writeK8sError(w, err)
@@ -45,7 +45,7 @@ func (h *K8sHandler) InspectConfigMap(w http.ResponseWriter, r *http.Request) {
 
 // DeleteConfigMap 删除 ConfigMap（NotFound 幂等）。
 func (h *K8sHandler) DeleteConfigMap(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteConfigMap(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
@@ -76,7 +76,7 @@ func (h *K8sHandler) ListSecrets(w http.ResponseWriter, r *http.Request) {
 
 // InspectSecret Secret 详情（JSON 返回脱敏摘要，?format=yaml 返回脱敏 YAML）。
 func (h *K8sHandler) InspectSecret(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	if r.URL.Query().Get("format") == "yaml" {
 		sec, err := h.ctx.K8sLogic.InspectSecretRaw(r.Context(), namespace, r.PathValue("name"))
 		if err != nil {
@@ -96,7 +96,7 @@ func (h *K8sHandler) InspectSecret(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSecret 删除 Secret（NotFound 幂等）。
 func (h *K8sHandler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := httpx.QueryValue[string](r, "namespace")
 	err := h.ctx.K8sLogic.DeleteSecret(r.Context(), namespace, r.PathValue("name"))
 	writeK8sDeleteResult(w, err)
 }
