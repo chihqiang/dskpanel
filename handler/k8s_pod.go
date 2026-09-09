@@ -145,8 +145,9 @@ func (h *K8sHandler) PodLogs(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if err != nil {
+			// EOF 也先刷新剩余行，避免末尾未换行内容缺失。
+			flushPending()
 			if err != io.EOF {
-				flushPending()
 				_ = sse.Event("error", err.Error())
 			}
 			return

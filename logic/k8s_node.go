@@ -2,7 +2,9 @@ package logic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/chihqiang/infra-go/logger"
 
@@ -10,6 +12,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // K8sNodeItem 节点列表项。
@@ -68,56 +71,46 @@ func (l *K8sLogic) InspectNode(ctx context.Context, name string) (*corev1.Node, 
 	return cli.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
 }
 
-// CordonNode 将节点标记为不可调度（设 Unschedulable=true）。
-func (l *K8sLogic) CordonNode(ctx context.Context, name string) error {
+// patchNodeUnschedulable 通过 Merge Patch 修改节点 unschedulable 状态，避免 Get→Update RMW 并发冲突。
+func (l *K8sLogic) patchNodeUnschedulable(ctx context.Context, name string, unschedulable bool) error {
 	cli, err := l.newClient()
 	if err != nil {
 		return err
 	}
-	node, err := cli.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	patchBytes, err := json.Marshal(map[string]any{"spec": map[string]any{"unschedulable": unschedulable}})
 	if err != nil {
 		return err
 	}
-	node.Spec.Unschedulable = true
-	_, err = cli.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = cli.CoreV1().Nodes().Patch(ctx, name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
-		logger.ErrorCtx(ctx, "k8s cordon node failed", logger.String("name", name), logger.Err(err))
+		op := "cordon"
+		if !unschedulable {
+			op = "uncordon"
+		}
+		logger.ErrorCtx(ctx, "k8s "+op+" node failed", logger.String("name", name), logger.Err(err))
 	}
 	return err
+}
+
+// CordonNode 将节点标记为不可调度（设 Unschedulable=true）。
+func (l *K8sLogic) CordonNode(ctx context.Context, name string) error {
+	return l.patchNodeUnschedulable(ctx, name, true)
 }
 
 // UncordonNode 将节点恢复调度（设 Unschedulable=false）。
 func (l *K8sLogic) UncordonNode(ctx context.Context, name string) error {
-	cli, err := l.newClient()
-	if err != nil {
-		return err
-	}
-	node, err := cli.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	node.Spec.Unschedulable = false
-	_, err = cli.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
-	if err != nil {
-		logger.ErrorCtx(ctx, "k8s uncordon node failed", logger.String("name", name), logger.Err(err))
-	}
-	return err
+	return l.patchNodeUnschedulable(ctx, name, false)
 }
 
 // DrainNode 驱逐节点上的所有 Pod（排除 DaemonSet Pod）。
-// 实际 Drain 需逐个 Pod 调用 Eviction API，此处实现简化版。
+// 先 Cordon（patch）再逐个驱逐，收集所有失败信息并在最后统一返回。
 func (l *K8sLogic) DrainNode(ctx context.Context, name string) error {
 	cli, err := l.newClient()
 	if err != nil {
 		return err
 	}
-	// 先 Cordon。
-	node, err := cli.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	node.Spec.Unschedulable = true
-	if _, err = cli.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+	// 先 Cordon（patch，无 RMW 冲突）。
+	if err := l.patchNodeUnschedulable(ctx, name, true); err != nil {
 		return err
 	}
 
@@ -130,6 +123,7 @@ func (l *K8sLogic) DrainNode(ctx context.Context, name string) error {
 	}
 
 	gracePeriod := int64(30)
+	var failures []string
 	for i := range podList.Items {
 		pod := &podList.Items[i]
 		// 跳过 DaemonSet Pod（通过 OwnerReference 判断）。
@@ -151,7 +145,13 @@ func (l *K8sLogic) DrainNode(ctx context.Context, name string) error {
 		if err != nil {
 			logger.WarnCtx(ctx, "k8s drain pod failed",
 				logger.String("pod", pod.Name), logger.String("ns", pod.Namespace), logger.Err(err))
+			failures = append(failures, fmt.Sprintf("%s/%s: %v", pod.Namespace, pod.Name, err))
 		}
+	}
+
+	// 即使有部分失败，仍返回汇总错误（前端/调用方可知哪些 Pod 驱逐失败）。
+	if len(failures) > 0 {
+		return fmt.Errorf("部分 Pod 驱逐失败: %s", strings.Join(failures, "; "))
 	}
 	return nil
 }
@@ -211,36 +211,37 @@ func (l *K8sLogic) NodeUsage(ctx context.Context, name string) (*K8sNodeUsage, e
 	podList, err := cli.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", name),
 	})
-	if err == nil {
-		var cpuReq, memReq resource.Quantity
-		podCount := 0
-		for i := range podList.Items {
-			pod := &podList.Items[i]
-			if pod.Status.Phase != corev1.PodRunning {
-				continue
+	if err != nil {
+		return nil, err
+	}
+	var cpuReq, memReq resource.Quantity
+	podCount := 0
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+		if pod.Status.Phase != corev1.PodRunning {
+			continue
+		}
+		podCount++
+		for _, cs := range pod.Spec.Containers {
+			if r, ok := cs.Resources.Requests[corev1.ResourceCPU]; ok {
+				cpuReq.Add(r)
 			}
-			podCount++
-			for _, cs := range pod.Spec.Containers {
-				if r, ok := cs.Resources.Requests[corev1.ResourceCPU]; ok {
-					cpuReq.Add(r)
-				}
-				if r, ok := cs.Resources.Requests[corev1.ResourceMemory]; ok {
-					memReq.Add(r)
-				}
+			if r, ok := cs.Resources.Requests[corev1.ResourceMemory]; ok {
+				memReq.Add(r)
 			}
 		}
-		usage.CPUUsed = cpuReq.String()
-		usage.MemUsed = formatResource(memReq)
-		usage.PodsUsed = podCount
+	}
+	usage.CPUUsed = cpuReq.String()
+	usage.MemUsed = formatResource(memReq)
+	usage.PodsUsed = podCount
 
-		if !allocatableCPU.IsZero() {
-			pct := float64(cpuReq.MilliValue()) / float64(allocatableCPU.MilliValue()) * 100
-			usage.CPUPercent = fmt.Sprintf("%.1f%%", pct)
-		}
-		if !allocatableMem.IsZero() {
-			pct := float64(memReq.Value()) / float64(allocatableMem.Value()) * 100
-			usage.MemPercent = fmt.Sprintf("%.1f%%", pct)
-		}
+	if !allocatableCPU.IsZero() {
+		pct := float64(cpuReq.MilliValue()) / float64(allocatableCPU.MilliValue()) * 100
+		usage.CPUPercent = fmt.Sprintf("%.1f%%", pct)
+	}
+	if !allocatableMem.IsZero() {
+		pct := float64(memReq.Value()) / float64(allocatableMem.Value()) * 100
+		usage.MemPercent = fmt.Sprintf("%.1f%%", pct)
 	}
 
 	return usage, nil

@@ -312,7 +312,6 @@ export interface K8sStorageClassItem {
   reclaim_policy: string
   binding_mode: string
   default: boolean
-  volume_binding: string
   created_at: string
 }
 

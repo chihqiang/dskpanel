@@ -153,9 +153,13 @@ func (l *VolumeLogic) Inspect(ctx context.Context, name string) (*VolumeDetail, 
 						break
 					}
 				}
+				cName := ""
+				if len(c.Names) > 0 {
+					cName = c.Names[0]
+				}
 				detail.Containers = append(detail.Containers, VolumeContainer{
 					ID:    c.ID,
-					Name:  c.Names[0],
+					Name:  cName,
 					State: string(c.State),
 					Dest:  dest,
 				})

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { Plus, Eye, FileText, ListChecks, Scaling, Settings2, Trash2, RefreshCw, RotateCcw } from '@lucide/vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
@@ -19,6 +19,12 @@ import {
 
 const toast = useToast()
 const confirm = useConfirm()
+
+// 组件卸载后停止后台轮询，避免离开页面后仍继续请求。
+let disposed = false
+onUnmounted(() => {
+  disposed = true
+})
 
 const loading = ref(false)
 const errorMsg = ref('')
@@ -58,7 +64,14 @@ onMounted(load)
 async function waitForReady(name: string, timeoutMs = 60000): Promise<void> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
+    // 组件已卸载：立即终止轮询。
+    if (disposed) {
+      return
+    }
     await load()
+    if (disposed) {
+      return
+    }
     const svc = items.value.find((s) => s.name === name)
     if (svc && svc.state === 'running' && !svc.has_update) {
       toast.success(`服务「${name}」已就绪`)
@@ -67,7 +80,9 @@ async function waitForReady(name: string, timeoutMs = 60000): Promise<void> {
     // 短暂间隔后继续。
     await new Promise((r) => setTimeout(r, 2000))
   }
-  toast.error(`服务「${name}」等待就绪超时，请检查任务状态`)
+  if (!disposed) {
+    toast.error(`服务「${name}」等待就绪超时，请检查任务状态`)
+  }
 }
 
 /** 创建/更新成功回调：刷新 + 自动等待就绪（name 为空时仅刷新）。 */

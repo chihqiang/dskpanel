@@ -381,11 +381,14 @@ func toK8sDeploymentItem(d *appsv1.Deployment) K8sDeploymentItem {
 		Namespace: d.Namespace,
 		Ready:     fmt.Sprintf("%d/%d", d.Status.ReadyReplicas, d.Status.Replicas),
 		Replicas:  d.Status.Replicas,
-		Desired:   *d.Spec.Replicas,
 		UpToDate:  d.Status.UpdatedReplicas,
 		Available: d.Status.AvailableReplicas,
 		CreatedAt: d.CreationTimestamp.Format("2006-01-02 15:04:05"),
 		Labels:    d.Labels,
+	}
+	// Spec.Replicas 为指针，避免 nil 解引用（本地构造/低版本场景可能缺失）。
+	if d.Spec.Replicas != nil {
+		item.Desired = *d.Spec.Replicas
 	}
 	if len(d.Spec.Template.Spec.Containers) > 0 {
 		item.Image = d.Spec.Template.Spec.Containers[0].Image

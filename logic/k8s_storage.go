@@ -28,12 +28,11 @@ type K8sPVCItem struct {
 
 // K8sStorageClassItem StorageClass 列表项。
 type K8sStorageClassItem struct {
-	Name         string `json:"name"`
-	Provisioner  string `json:"provisioner"`
+	Name          string `json:"name"`
+	Provisioner   string `json:"provisioner"`
 	ReclaimPolicy string `json:"reclaim_policy"`
 	BindingMode   string `json:"binding_mode"`
 	Default       bool   `json:"default"`
-	VolumeBinding string `json:"volume_binding"`
 	CreatedAt     string `json:"created_at"`
 }
 
@@ -129,8 +128,7 @@ func (l *K8sLogic) ListStorageClasses(ctx context.Context) ([]K8sStorageClassIte
 			Provisioner:   sc.Provisioner,
 			ReclaimPolicy: reclaimPolicy,
 			BindingMode:   bindingMode,
-			Default:        sc.Name == defaultSC,
-			VolumeBinding: bindingMode,
+			Default:       sc.Name == defaultSC,
 			CreatedAt:     sc.CreationTimestamp.Format("2006-01-02 15:04:05"),
 		})
 	}

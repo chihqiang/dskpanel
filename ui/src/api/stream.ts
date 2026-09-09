@@ -114,7 +114,7 @@ export function createSSEStream(
           }
         }
       }
-      // 流自然结束，如果没有收到显式 done 事件，也触发 onDone。
+      // 流自然结束：无论是否收到显式 done 事件，都触发 onClose（onDone 仅在收到 done 事件时触发）。
       onClose?.()
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {

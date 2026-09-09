@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"time"
 
 	"github.com/chihqiang/infra-go/logger"
 
@@ -159,7 +160,29 @@ type PodExecResult struct {
 	Stderr string `json:"stderr,omitempty"`
 }
 
+// k8sExecMaxOutput exec 一次性命令最大捕获字节数，防止 cat /dev/zero 等命令内存无限增长。
+const k8sExecMaxOutput = 1 << 20 // 1 MiB
+
+// limitWriter 写入上限的 writer：达到 max 后丢弃多余数据。
+type limitWriter struct {
+	buf *bytes.Buffer
+	max int
+}
+
+func (w *limitWriter) Write(p []byte) (int, error) {
+	remaining := w.max - w.buf.Len()
+	if remaining > 0 {
+		n := len(p)
+		if n > remaining {
+			n = remaining
+		}
+		w.buf.Write(p[:n])
+	}
+	return len(p), nil
+}
+
 // ExecPod 在 Pod 中执行命令（一次性，非交互式）。
+// 对输出设置上限并给命令设置超时，避免异常命令长时间阻塞或耗尽内存。
 func (l *K8sLogic) ExecPod(ctx context.Context, opts PodExecOptions) (*PodExecResult, error) {
 	cli, err := l.newClient()
 	if err != nil {
@@ -193,14 +216,20 @@ func (l *K8sLogic) ExecPod(ctx context.Context, opts PodExecOptions) (*PodExecRe
 		return nil, err
 	}
 
-	var stdout, stderr bytes.Buffer
-	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdout: &stdout,
-		Stderr: &stderr,
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout := &limitWriter{buf: &stdoutBuf, max: k8sExecMaxOutput}
+	stderr := &limitWriter{buf: &stderrBuf, max: k8sExecMaxOutput}
+
+	execCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	err = executor.StreamWithContext(execCtx, remotecommand.StreamOptions{
+		Stdout: stdout,
+		Stderr: stderr,
 	})
 	result := &PodExecResult{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
+		Stdout: stdoutBuf.String(),
+		Stderr: stderrBuf.String(),
 	}
 	if err != nil {
 		return result, fmt.Errorf("exec failed: %w", err)

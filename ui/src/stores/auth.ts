@@ -2,9 +2,10 @@ import { defineStore } from 'pinia'
 import { login as apiLogin, type LoginRequest } from '@/api/auth'
 import { clearToken, getToken, setToken } from '@/api/http'
 
-/** 从 token 的 base64url payload 解码（JWT 载荷，非加密，仅展示用）。 */
+/** 从 token 的 base64url payload 解码（自定义 token 结构 body.signature，body 即载荷）。 */
 function decodePayload(token: string): { username?: string; expire_at?: number } | null {
   try {
+    // 本项目 token 为 body.signature，payload 即第 1 段（index 0），与 logic/auth.go 一致。
     const part = token.split('.')[0]
     if (!part) return null
     const normalized = part.replace(/-/g, '+').replace(/_/g, '/')

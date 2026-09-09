@@ -85,17 +85,18 @@ export async function request<T = unknown>(
       return resp as unknown as T
     }
 
+    // 401 需在解析 body 前判断：非 JSON 的 401 响应不会进入 JSON 解析分支。
+    if (resp.status === 401) {
+      handleUnauthorized()
+      throw new ApiError(401, 'unauthorized')
+    }
+
     // 尝试解析 JSON；失败则按错误处理。
     let payload: ApiResponse<T>
     try {
       payload = (await resp.json()) as ApiResponse<T>
     } catch {
       throw new ApiError(resp.status, `unexpected response: ${resp.statusText}`)
-    }
-
-    if (resp.status === 401) {
-      handleUnauthorized()
-      throw new ApiError(401, 'unauthorized')
     }
 
     if (payload.code !== 0 || !resp.ok) {

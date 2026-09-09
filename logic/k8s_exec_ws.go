@@ -2,8 +2,10 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -23,8 +25,10 @@ type k8sExecStream struct {
 	stdin  *io.PipeWriter
 	stdout *io.PipeReader
 	sizeQ  chan remotecommand.TerminalSize
+	closed chan struct{}
 	cancel context.CancelFunc
 	done   chan struct{}
+	once   sync.Once
 }
 
 // Read 读取容器输出。
@@ -38,18 +42,30 @@ func (s *k8sExecStream) Write(p []byte) (int, error) {
 }
 
 // Close 关闭流。
+// 通过 closed 信号 + 超时等待流 goroutine 结束，避免连接卡死时永久阻塞。
 func (s *k8sExecStream) Close() error {
-	s.cancel()
-	s.stdin.Close()
-	s.stdout.Close()
-	<-s.done
+	s.once.Do(func() {
+		close(s.closed)
+		s.cancel()
+		_ = s.stdin.Close()
+		_ = s.stdout.Close()
+		select {
+		case <-s.done:
+		case <-time.After(2 * time.Second):
+		}
+	})
 	return nil
 }
 
 // Resize 更新 TTY 尺寸。
+// 流已关闭时立即返回，避免在无接收方时永久阻塞。
 func (s *k8sExecStream) Resize(cols, rows uint16) error {
-	s.sizeQ <- remotecommand.TerminalSize{Width: cols, Height: rows}
-	return nil
+	select {
+	case s.sizeQ <- remotecommand.TerminalSize{Width: cols, Height: rows}:
+		return nil
+	case <-s.closed:
+		return io.ErrClosedPipe
+	}
 }
 
 // ExecPodInteractive 交互式 exec（TTY 模式），返回双向流。
@@ -90,6 +106,7 @@ func (l *K8sLogic) ExecPodInteractive(ctx context.Context, opts PodExecOptions) 
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 	sizeQ := make(chan remotecommand.TerminalSize, 1)
+	closed := make(chan struct{})
 
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -98,6 +115,7 @@ func (l *K8sLogic) ExecPodInteractive(ctx context.Context, opts PodExecOptions) 
 		stdin:  stdinW,
 		stdout: stdoutR,
 		sizeQ:  sizeQ,
+		closed: closed,
 		cancel: cancel,
 		done:   done,
 	}
@@ -107,14 +125,17 @@ func (l *K8sLogic) ExecPodInteractive(ctx context.Context, opts PodExecOptions) 
 		defer stdinR.Close()
 		defer stdoutW.Close()
 
-		err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+		err := executor.StreamWithContext(ctx, remotecommand.StreamOptions{
 			Stdin:             stdinR,
 			Stdout:            stdoutW,
 			Stderr:            stdoutW,
 			Tty:               true,
-			TerminalSizeQueue: &terminalSizeQueue{ch: sizeQ},
+			TerminalSizeQueue: &terminalSizeQueue{ch: sizeQ, closed: closed},
 		})
-		_ = err
+		// 将流错误回显到终端，使客户端能看到失败原因而非静默断开。
+		if err != nil && !errors.Is(err, context.Canceled) {
+			_, _ = stdoutW.Write([]byte("\r\n[exec stream error] " + err.Error() + "\r\n"))
+		}
 	}()
 
 	return stream, nil
@@ -122,16 +143,18 @@ func (l *K8sLogic) ExecPodInteractive(ctx context.Context, opts PodExecOptions) 
 
 // terminalSizeQueue 实现 remotecommand.TerminalSizeQueue。
 type terminalSizeQueue struct {
-	ch chan remotecommand.TerminalSize
+	ch     chan remotecommand.TerminalSize
+	closed chan struct{}
 }
 
 func (q *terminalSizeQueue) Next() *remotecommand.TerminalSize {
-	size, ok := <-q.ch
-	if !ok {
+	select {
+	case size, ok := <-q.ch:
+		if !ok {
+			return nil
+		}
+		return &size
+	case <-q.closed:
 		return nil
 	}
-	return &size
 }
-
-// ensure sync package is used.
-var _ = sync.WaitGroup{}

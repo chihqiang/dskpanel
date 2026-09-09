@@ -26,19 +26,39 @@ const tab = ref<'my' | 'system'>('my')
 
 /** 系统事件 SSE 取消函数。 */
 let stopEvents: (() => void) | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let disposed = false
 
-onMounted(() => {
-  // 全局订阅 Docker 系统事件。
+function connectEvents(retryDelay = 3000): void {
+  if (disposed) return
+  // 订阅前先释放上一次的流。
+  stopEvents?.()
   stopEvents = dockerEventsStream(
     (ev) => events.push(ev),
     () => {
-      // 忽略（连接断开后组件重挂载会重连）
+      // 连接异常：安排自动重连（组件仍挂载时），避免订阅永久失效。
+      if (!disposed && !reconnectTimer) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null
+          connectEvents(Math.min(retryDelay * 2, 30000))
+        }, retryDelay)
+      }
     },
   )
+}
+
+onMounted(() => {
+  // 首次启动立即连接。
+  connectEvents(1000)
 })
 onBeforeUnmount(() => {
+  disposed = true
   stopEvents?.()
   stopEvents = null
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
 })
 
 /** 顶部铃铛总未读数 = 我的操作 + 系统事件。 */

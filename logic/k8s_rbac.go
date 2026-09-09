@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -234,6 +235,8 @@ func toK8sRoleItem(obj interface{}, kind string) K8sRoleItem {
 		item.Rules = len(r.Rules)
 		item.CreatedAt = r.CreationTimestamp.Format("2006-01-02 15:04:05")
 		item.Labels = r.Labels
+	default:
+		logger.Warn("toK8sRoleItem unexpected type", logger.String("got", fmt.Sprintf("%T", obj)))
 	}
 	return item
 }
@@ -257,6 +260,8 @@ func toK8sRoleBindingItem(obj interface{}, kind string) K8sRoleBindingItem {
 		item.Subjects = len(rb.Subjects)
 		item.CreatedAt = rb.CreationTimestamp.Format("2006-01-02 15:04:05")
 		item.Labels = rb.Labels
+	default:
+		logger.Warn("toK8sRoleBindingItem unexpected type", logger.String("got", fmt.Sprintf("%T", obj)))
 	}
 	return item
 }
