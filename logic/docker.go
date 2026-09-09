@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/client"
 )
 
@@ -73,34 +71,6 @@ func (l *DockerLogic) Detect(ctx context.Context) *DockerInfo {
 		Memory:    info.MemTotal,
 		PingTime:  time.Since(start),
 	}
-}
-
-// ListContainers 列出容器（供后续 Docker 单机管理扩展）。
-func (l *DockerLogic) ListContainers(ctx context.Context) ([]container.Summary, error) {
-	cli, err := client.New(client.FromEnv)
-	if err != nil {
-		return nil, err
-	}
-	defer cli.Close()
-	res, err := cli.ContainerList(ctx, client.ContainerListOptions{All: true})
-	if err != nil {
-		return nil, err
-	}
-	return res.Items, nil
-}
-
-// ListImages 列出镜像（供后续 Docker 单机管理扩展）。
-func (l *DockerLogic) ListImages(ctx context.Context) ([]image.Summary, error) {
-	cli, err := client.New(client.FromEnv)
-	if err != nil {
-		return nil, err
-	}
-	defer cli.Close()
-	res, err := cli.ImageList(ctx, client.ImageListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res.Items, nil
 }
 
 // DockerStats 资源统计。

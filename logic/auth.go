@@ -3,6 +3,7 @@ package logic
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -94,7 +95,12 @@ func (l *AuthLogic) verifyAccount(username, password string) bool {
 	if strings.HasPrefix(l.cfg.Password, "$2a$") || strings.HasPrefix(l.cfg.Password, "$2b$") {
 		return hash.BcryptMatch(l.cfg.Password, password)
 	}
-	return hmac.Equal([]byte(l.cfg.Password), []byte(password))
+	// 长度不同直接返回，避免 subtle.ConstantTimeCompare 在长度不一致时的数据竞争告警；
+	// 长度一致时采用常量时间比较，降低时序侧信道风险。
+	if len(l.cfg.Password) != len(password) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(l.cfg.Password), []byte(password)) == 1
 }
 
 // sign 生成 token：base64url(payload) + "." + hmac-sha256 签名。

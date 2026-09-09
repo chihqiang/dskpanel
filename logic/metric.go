@@ -42,7 +42,7 @@ func NewMetricLogic(db *gorm.DB, cfg config.Metric) *MetricLogic {
 	return &MetricLogic{
 		db:      db,
 		cfg:     cfg,
-		docker:  &DockerLogic{},
+		docker:  NewDockerLogic(),
 		ctx:     ctx,
 		cancel:  cancel,
 		stopped: make(chan struct{}),
@@ -142,14 +142,16 @@ func (l *MetricLogic) ListNodeMetrics(ctx context.Context, typ string, limit int
 	var rows []model.NodeMetric
 	if err := l.db.WithContext(ctx).
 		Where("type = ?", typ).
-		Order("time ASC").
+		Order("time DESC").
 		Limit(limit).
 		Find(&rows).Error; err != nil {
 		logger.ErrorCtx(ctx, "metric list failed", logger.Err(err))
 		return nil, err
 	}
+	// 按时间升序返回（最新在后），便于图表按时间顺序绘制。
 	items := make([]NodeMetricItem, 0, len(rows))
-	for _, r := range rows {
+	for i := len(rows) - 1; i >= 0; i-- {
+		r := rows[i]
 		items = append(items, NodeMetricItem{
 			CPU:                 r.CPU,
 			Memory:              r.Memory,
@@ -186,9 +188,11 @@ func (l *MetricLogic) collectContainerStats(ctx context.Context) (cpuMilli int64
 	var totalCPU float64
 	var totalMem uint64
 	for _, c := range res.Items {
+		// 非流式快照，请求 daemon 附带上一采样点（precpu），据差值计算 CPU 利用率，
+		// 避免直接用累计计数器相除导致利用率失真。
 		statsRes, err := cli.ContainerStats(ctx, c.ID, client.ContainerStatsOptions{
 			Stream:                false,
-			IncludePreviousSample: false,
+			IncludePreviousSample: true,
 		})
 		if err != nil {
 			continue
@@ -199,22 +203,13 @@ func (l *MetricLogic) collectContainerStats(ctx context.Context) (cpuMilli int64
 			if err := json.NewDecoder(statsRes.Body).Decode(&s); err != nil {
 				return
 			}
-			// CPU 使用率：容器累计 CPU 时间 / 系统累计时间 * 在线核数。
-			if s.CPUStats.SystemUsage > 0 {
-				cores := float64(s.CPUStats.OnlineCPUs)
-				if cores <= 0 {
-					cores = 1
-				}
-				totalCPU += float64(s.CPUStats.CPUUsage.TotalUsage) / float64(s.CPUStats.SystemUsage) * cores * 100
-			}
+			totalCPU += calcCPUPercent(&s)
 			totalMem += s.MemoryStats.Usage
 		}()
 	}
 
-	if totalCPU > 100 {
-		totalCPU = 100
-	}
-	// CPU 使用量（毫核）：以利用率估算（按 1 核 1000 毫核 * 利用率近似）。
+	// CPU 使用量（毫核）：以总利用率估算（按 1 核 1000 毫核 * 利用率近似）。
+	// 多核下总利用率可能超过 100，此处不封顶，如实反映容器占用的计算量。
 	cpuMilli = int64(totalCPU) * 10
 	return cpuMilli, totalCPU, int64(totalMem / 1024)
 }

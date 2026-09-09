@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -661,22 +662,10 @@ type ContainerStats struct {
 	Running    bool    `json:"running"`
 }
 
-// calcStats 由两次 CPU 采样计算 CPU 百分比（与 docker stats 一致）。
+// calcStats 由 CPU 采样差值计算 CPU 百分比（与 docker stats 一致）。
 func calcStats(s *container.StatsResponse) *ContainerStats {
 	cs := &ContainerStats{}
-	cpuDelta := float64(s.CPUStats.CPUUsage.TotalUsage)
-	sysDelta := float64(s.CPUStats.SystemUsage)
-	if s.PreCPUStats.SystemUsage > 0 && s.PreCPUStats.CPUUsage.TotalUsage > 0 {
-		cpuDelta = float64(s.CPUStats.CPUUsage.TotalUsage - s.PreCPUStats.CPUUsage.TotalUsage)
-		sysDelta = float64(s.CPUStats.SystemUsage - s.PreCPUStats.SystemUsage)
-	}
-	online := s.CPUStats.OnlineCPUs
-	if online == 0 {
-		online = 1
-	}
-	if sysDelta > 0 && cpuDelta > 0 {
-		cs.CPUPercent = (cpuDelta / sysDelta) * float64(online) * 100
-	}
+	cs.CPUPercent = calcCPUPercent(s)
 
 	cs.MemUsage = s.MemoryStats.Usage
 	cs.MemLimit = s.MemoryStats.Limit
@@ -702,6 +691,28 @@ func calcStats(s *container.StatsResponse) *ContainerStats {
 	}
 	cs.Pids = uint64(s.PidsStats.Current)
 	return cs
+}
+
+// calcCPUPercent 由 CPU 采样差值计算利用率（与 docker stats 一致）。
+// 优先使用 precpu 采样的差值，避免直接用累计计数器相除导致利用率失真。
+func calcCPUPercent(s *container.StatsResponse) float64 {
+	if s == nil {
+		return 0
+	}
+	cpuDelta := float64(s.CPUStats.CPUUsage.TotalUsage)
+	sysDelta := float64(s.CPUStats.SystemUsage)
+	if s.PreCPUStats.SystemUsage > 0 && s.PreCPUStats.CPUUsage.TotalUsage > 0 {
+		cpuDelta = float64(s.CPUStats.CPUUsage.TotalUsage - s.PreCPUStats.CPUUsage.TotalUsage)
+		sysDelta = float64(s.CPUStats.SystemUsage - s.PreCPUStats.SystemUsage)
+	}
+	online := s.CPUStats.OnlineCPUs
+	if online == 0 {
+		online = 1
+	}
+	if sysDelta > 0 && cpuDelta > 0 {
+		return (cpuDelta / sysDelta) * float64(online) * 100
+	}
+	return 0
 }
 
 // Commit 将容器提交为镜像（docker commit）。
@@ -799,8 +810,7 @@ func (l *ContainerLogic) Unpause(ctx context.Context, id string) error {
 	return nil
 }
 
-// Export 导出容器文件系统（docker export），返回 tar 流。
-// 注意：返回的读取器依赖连接，不在此处关闭 cli；由调用方在读取完成后关闭。
+// Export 导出容器文件系统（docker export），返回 tar 流（调用方负责关闭）。
 func (l *ContainerLogic) Export(ctx context.Context, id string) (io.ReadCloser, error) {
 	logger.InfoCtx(ctx, "container export", logger.String("id", id))
 	cli, err := l.newClient()
@@ -814,7 +824,8 @@ func (l *ContainerLogic) Export(ctx context.Context, id string) (io.ReadCloser, 
 		logger.ErrorCtx(ctx, "container export failed", logger.String("id", id), logger.Err(err))
 		return nil, err
 	}
-	return res, nil
+	// 导出流依赖底层连接，关闭读取器的同时关闭 cli，避免连接泄漏。
+	return &logReadCloser{rc: res, closer: cli}, nil
 }
 
 // Rename 重命名容器。
@@ -843,6 +854,9 @@ const (
 	BatchRemove  BatchAction = "remove"
 )
 
+// ErrUnknownBatchAction 未知的批量操作。
+var ErrUnknownBatchAction = errors.New("unknown batch action")
+
 // Batch 批量操作容器，返回成功数与失败列表。
 func (l *ContainerLogic) Batch(ctx context.Context, action BatchAction, ids []string) (int, []string, error) {
 	logger.InfoCtx(ctx, "container batch", logger.String("action", string(action)), logger.Int("count", len(ids)))
@@ -867,7 +881,7 @@ func (l *ContainerLogic) Batch(ctx context.Context, action BatchAction, ids []st
 		case BatchRemove:
 			_, err = cli.ContainerRemove(ctx, id, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
 		default:
-			return 0, nil, strconv.ErrSyntax
+			return 0, nil, fmt.Errorf("%w: %s", ErrUnknownBatchAction, string(action))
 		}
 		if err != nil {
 			failed = append(failed, id)

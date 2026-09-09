@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -51,7 +50,7 @@ func UpgradeWS(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) 
 //  1. 升级为 WebSocket；
 //  2. open 创建终端流（容器 attach / k8s exec），失败时发送错误关闭帧；
 //  3. 双向桥接：流输出 → WebSocket 二进制帧，WebSocket JSON 消息 → 流输入；
-//  4. 任一端结束或断线后，关闭流并发送正常关闭帧通知前端。
+//  4. 任一端结束或断线后，关闭 WebSocket 与流，避免 goroutine 泄漏。
 func HandleWS(w http.ResponseWriter, r *http.Request, open func() (WSStream, error)) {
 	ws, err := UpgradeWS(w, r)
 	if err != nil {
@@ -67,12 +66,19 @@ func HandleWS(w http.ResponseWriter, r *http.Request, open func() (WSStream, err
 	}
 	defer stream.Close()
 
-	var wg sync.WaitGroup
+	// 任一方向结束即整体关闭，避免 goroutine 泄漏/悬挂：
+	// 终端方向退出（stream EOF/错误）时 close(done)，观察 goroutine 收到后主动 ws.Close()，
+	// 触发下方阻塞在 ReadMessage 的主循环返回；客户端断开则由主循环返回并 stream.Close()，
+	// 使阻塞在 stream.Read 的写 goroutine 解除阻塞。
+	done := make(chan struct{})
+	go func() {
+		<-done
+		_ = ws.Close()
+	}()
 
 	// 流输出 → WebSocket（二进制帧）。
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer close(done)
 		buf := make([]byte, 4096)
 		for {
 			n, err := stream.Read(buf)
@@ -88,36 +94,25 @@ func HandleWS(w http.ResponseWriter, r *http.Request, open func() (WSStream, err
 	}()
 
 	// WebSocket → 流输入（JSON 消息）。
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			_, data, err := ws.ReadMessage()
-			if err != nil {
-				// 前端关闭或断线：通知终端结束。
-				return
+	for {
+		_, data, err := ws.ReadMessage()
+		if err != nil {
+			// 前端关闭、断线或终端已结束（done 触发 ws.Close）。
+			return
+		}
+		var msg terminalMessage
+		if err := json.Unmarshal(data, &msg); err != nil {
+			continue
+		}
+		switch msg.Type {
+		case "input":
+			if msg.Data != "" {
+				_, _ = stream.Write([]byte(msg.Data))
 			}
-			var msg terminalMessage
-			if err := json.Unmarshal(data, &msg); err != nil {
-				continue
-			}
-			switch msg.Type {
-			case "input":
-				if msg.Data != "" {
-					_, _ = stream.Write([]byte(msg.Data))
-				}
-			case "resize":
-				if msg.Cols > 0 && msg.Rows > 0 {
-					_ = stream.Resize(uint16(msg.Cols), uint16(msg.Rows))
-				}
+		case "resize":
+			if msg.Cols > 0 && msg.Rows > 0 {
+				_ = stream.Resize(uint16(msg.Cols), uint16(msg.Rows))
 			}
 		}
-	}()
-
-	// 等待任一方向结束（终端退出或 ws 断开）。
-	wg.Wait()
-
-	// 终端结束（非前端主动关闭）时，发送关闭帧通知前端。
-	_ = ws.WriteMessage(websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "terminal closed"))
+	}
 }

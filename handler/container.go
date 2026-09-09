@@ -178,9 +178,9 @@ func (h *ContainerHandler) LogsStream(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if err != nil {
+			// 无论错误还是 EOF，先 flush 残余（避免丢最后一行无换行日志）。
+			flushPending()
 			if err != io.EOF {
-				// 读取错误：先 flush 残余，再发错误事件。
-				flushPending()
 				_ = sse.Event("error", err.Error())
 			}
 			return
