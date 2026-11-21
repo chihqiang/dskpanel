@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background-color: rgb(156 163 175 / 0.5);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 通用表单控件样式（输入框/下拉框/文本域） */
+.input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(203 213 225);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.925rem;
+  line-height: 1.5;
+  outline: none;
+  background-color: rgb(255 255 255);
+  color: rgb(15 23 42);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input:focus {
+  border-color: rgb(59 130 246);
+  box-shadow: 0 0 0 1px rgb(59 130 246);
+}
+.dark .input {
+  border-color: rgb(71 85 105);
+  background-color: rgb(15 23 42);
+  color: rgb(241 245 249);
+}
+
+/* 下拉框统一样式：去掉系统默认外观，自定义箭头，与输入框高度/内边距一致 */
+select.input:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 1rem 1rem;
+  cursor: pointer;
+  color-scheme: light;
+}
+.dark select.input:not([multiple]) {
+  color-scheme: dark;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+select.input option {
+  background-color: rgb(255 255 255);
+  color: rgb(15 23 42);
+}
+.dark select.input option {
+  background-color: rgb(15 23 42);
+  color: rgb(241 245 249);
+}
+
+/* 紧凑表单控件（配合 sm 尺寸按钮，如模板选择/日志 tail）。
+   用更小 padding + 行高保证内容完整显示，而非 h-8 强制高度导致截断。 */
+.input-sm {
+  height: auto;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+select.input-sm:not([multiple]) {
+  padding-right: 2rem;
+}
+

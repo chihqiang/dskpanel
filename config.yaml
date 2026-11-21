@@ -1,0 +1,41 @@
+name: dskpanel
+
+host: 0.0.0.0
+port: 8080
+
+logger:
+  serviceName: dskpanel
+  mode: console
+  encoding: plain
+  level: info
+
+db:
+  driver: sqlite
+  database: /tmp/dskpanel/dskpanel.db
+
+auth:
+  secret: dskpanel-change-me
+  token_ttl: 24h
+  username: admin
+  password: admin123
+
+metric:
+  enabled: true
+  resolution: 60s
+  duration: 7200s
+
+deploy:
+  dir: /tmp/dskpanel/deploy
+
+# Swarm 连接配置
+swarm:
+  endpoint: ""
+  ca: ""
+  cert: ""
+  key: ""
+
+# Kubernetes 连接配置
+k8s:
+  kubeconfig: ""
+  master: ""
+  namespace: ""
